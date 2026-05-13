@@ -1,0 +1,21 @@
+const BASE = process.env.REACT_APP_API_URL || 'http://localhost:3001';
+
+async function req(method, path, body) {
+  const res = await fetch(`${BASE}${path}`, {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+export const api = {
+  getItems:           ()         => req('GET',   '/api/items'),
+  patchItem:          (id, data) => req('PATCH',  `/api/items/${id}`, data),
+  getSessions:        ()         => req('GET',   '/api/sessions'),
+  getSession:         (id)       => req('GET',   `/api/sessions/${id}`),
+  postSession:        (data)     => req('POST',  '/api/sessions', data),
+  getSettings:        ()         => req('GET',   '/api/settings'),
+  postSetting:        (key, val) => req('POST',  '/api/settings', { key, value: val }),
+};
