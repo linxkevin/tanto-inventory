@@ -175,12 +175,15 @@ function StaffTab({ lang, t, items, onComplete, showToast }) {
       finalStamps[activeVendor] = { staff: staffName, time: timeStr };
     }
 
-    const sessionItems = items.map(item => ({
-      id: item.id,
-      current: counts[item.id] !== undefined && counts[item.id] !== '' ? parseInt(counts[item.id]) : null,
-      staffStamp: finalStamps[item.vendor]?.staff || staffName,
-      stampTime:  finalStamps[item.vendor]?.time  || timeStr,
-    }));
+    // 選択したベンダーのアイテムのみ送信（未選択ベンダーは含めない）
+    const sessionItems = items
+      .filter(item => selected.includes(item.vendor))
+      .map(item => ({
+        id: item.id,
+        current: counts[item.id] !== undefined && counts[item.id] !== '' ? parseInt(counts[item.id]) : null,
+        staffStamp: finalStamps[item.vendor]?.staff || staffName,
+        stampTime:  finalStamps[item.vendor]?.time  || timeStr,
+      }));
 
     try {
       await api.postSession({
@@ -400,10 +403,16 @@ function AdminTab({ lang, t, items, sessions, adminEmail, setAdminEmail, showToa
   function openGmail() {
     if (!mailTo) { showToast(t('toastNoEmail')); return; }
     api.postSetting('adminEmail', mailTo).then(() => setAdminEmail(mailTo)).catch(console.error);
-    const url = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(mailTo)}&su=${encodeURIComponent(mailSubject)}&body=${encodeURIComponent(mailBody)}`;
+    // 本文をクリップボードにコピーしてからGmailを開く（URL長すぎるとError 400になるため）
+    navigator.clipboard.writeText(mailBody).catch(() => {});
+    const url = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(mailTo)}&su=${encodeURIComponent(mailSubject)}`;
     window.open(url, '_blank');
     setShowGmail(false);
-    showToast(t('toastGmail'));
+    showToast(lang==='en'
+      ? 'Gmail opened. Body copied to clipboard — paste it in.'
+      : lang==='zh'
+      ? 'Gmail已打开。正文已复制，请粘贴到邮件中。'
+      : 'Gmailを開きました。本文はクリップボードにコピー済みです。メール本文に貼り付けてください。');
   }
 
   function copyOrder() {
