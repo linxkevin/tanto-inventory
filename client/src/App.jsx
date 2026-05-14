@@ -22,6 +22,7 @@ export default function App() {
   const [adminEmail, setAdminEmail] = useState('');
   const [loading, setLoading] = useState(true);
   const [toastMsg, showToast] = useToast();
+  const [showManual, setShowManual] = useState(false);
 
   const t = (k) => UI[lang][k] || UI.ja[k] || k;
 
@@ -51,6 +52,11 @@ export default function App() {
       <div className="header">
         <div className="logo"><span>Tanto</span> Gyoza &amp; Ramen Bar</div>
         <div style={{display:'flex',alignItems:'center',gap:10}}>
+          <button
+            onClick={()=>setShowManual(true)}
+            style={{width:30,height:30,borderRadius:'50%',border:'0.5px solid var(--border)',background:'var(--bg)',color:'var(--text-2)',fontSize:14,fontWeight:500,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}
+            aria-label="使い方"
+          >?</button>
           <div className="lang-switcher">
             {['ja','en','zh'].map(l => (
               <button key={l} className={`lang-btn${lang===l?' active':''}`} onClick={()=>setLang(l)}>
@@ -99,6 +105,9 @@ export default function App() {
           showToast={showToast}
         />
       )}
+
+      {/* Manual Modal */}
+      {showManual && <ManualModal lang={lang} onClose={()=>setShowManual(false)} />}
 
       {/* Toast */}
       {toastMsg && <div className="toast show">{toastMsg}</div>}
@@ -812,6 +821,185 @@ function SettingsTab({ lang, t, items, setItems, adminEmail, setAdminEmail, show
         <div className="form-row">
           <label className="form-label">{t('emailLabel')}</label>
           <input className="form-input" value={email} onChange={e=>setEmail(e.target.value)} placeholder="manager@tanto-hi.com" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────
+// MANUAL MODAL
+// ─────────────────────────────────────────────────────
+const MANUAL_STEPS = {
+  ja: [
+    {
+      num: '1', color: '#D85A30',
+      title: '言語を選択する',
+      sub: 'Select Language',
+      body: '画面右上の言語ボタンをタップして、使いやすい言語に切り替えます。「日本語」「English」「中文」から選択できます。',
+      tip: '一度選ぶと表示がすぐ切り替わります。',
+    },
+    {
+      num: '2', color: '#D85A30',
+      title: '担当ベンダーを選択する',
+      sub: 'Select Your Vendor',
+      body: '担当者名を入力後、リストから担当ベンダーを選択します。サーバーの方は「サーバー棚卸し」を選択。オレンジ色でハイライトされたら「棚卸しを開始する」をタップします。',
+      tip: '担当外のベンダーは選ばないでください。複数担当の場合は複数選択も可能です。',
+    },
+    {
+      num: '3', color: '#D85A30',
+      title: '在庫をカウントする',
+      sub: 'Count Inventory',
+      body: '各アイテムの現在庫数を「＋」「－」ボタンまたは直接入力で記録します。途中で止める場合は「このベンダーを保存」で途中保存できます。',
+      tip: '数が不確かな場合は 0 のままにし、確認してから入力してください。',
+    },
+    {
+      num: '✓', color: '#1D9E75',
+      title: '完了して送信する',
+      sub: 'Complete & Send',
+      body: '全アイテムの入力が終わったら「全て完了・送信」ボタンをタップします。管理者画面に結果が表示されれば完了です。送信ボタンを押さずに閉じた場合、データは送信されません。',
+      tip: '送信完了後は管理者に報告してください。',
+    },
+  ],
+  en: [
+    {
+      num: '1', color: '#D85A30',
+      title: 'Select Language',
+      sub: '言語を選択する',
+      body: 'Tap the language buttons in the top right to switch to your preferred language: 日本語, English, or 中文.',
+      tip: 'The display switches immediately after selection.',
+    },
+    {
+      num: '2', color: '#D85A30',
+      title: 'Select Your Vendor',
+      sub: '担当ベンダーを選択',
+      body: 'Enter your name, then tap your assigned vendor from the list. Servers should select "Server Inventory". Once highlighted in orange, tap "Start Counting".',
+      tip: 'Only select your assigned vendor(s). Do not select vendors you are not responsible for.',
+    },
+    {
+      num: '3', color: '#D85A30',
+      title: 'Count Inventory',
+      sub: '在庫をカウントする',
+      body: 'Enter the current stock for each item using the + and − buttons or by typing directly. You can save progress mid-way with "Save This Vendor".',
+      tip: 'If unsure of a count, leave it at 0 and verify before submitting.',
+    },
+    {
+      num: '✓', color: '#1D9E75',
+      title: 'Complete & Send',
+      sub: '完了して送信する',
+      body: 'Once all items are entered, tap "Complete & Send All". Results will appear in the admin view. If you close the app without tapping this button, data will NOT be saved.',
+      tip: 'Please notify your manager after submitting.',
+    },
+  ],
+  zh: [
+    {
+      num: '1', color: '#D85A30',
+      title: '选择语言',
+      sub: 'Select Language',
+      body: '点击右上角的语言按钮，切换到您偏好的语言：日本語、English 或 中文。',
+      tip: '选择后页面会立即切换。',
+    },
+    {
+      num: '2', color: '#D85A30',
+      title: '选择负责的供应商',
+      sub: 'Select Your Vendor',
+      body: '输入您的姓名后，从列表中选择您负责的供应商。服务员请选择「サーバー棚卸し」。选中后变为橙色高亮，点击「开始盘点」。',
+      tip: '请只选择您负责的供应商，不要选择其他供应商。',
+    },
+    {
+      num: '3', color: '#D85A30',
+      title: '盘点库存',
+      sub: 'Count Inventory',
+      body: '使用 ＋ 和 － 按钮或直接输入，记录每个商品的当前库存数量。中途可以点击「保存此供应商」暂时保存进度。',
+      tip: '如果不确定数量，请先填 0，确认后再修改。',
+    },
+    {
+      num: '✓', color: '#1D9E75',
+      title: '完成并提交',
+      sub: 'Complete & Send',
+      body: '所有商品录入完成后，点击「全部完成并发送」按钮。管理员界面出现结果即表示提交成功。如果不点击此按钮直接关闭，数据将不会被保存。',
+      tip: '提交后请通知管理员。',
+    },
+  ],
+};
+
+function ManualModal({ lang, onClose }) {
+  const [openStep, setOpenStep] = useState(null);
+  const steps = MANUAL_STEPS[lang] || MANUAL_STEPS.ja;
+  const title = lang==='en' ? 'How to Use' : lang==='zh' ? '使用说明' : '棚卸しの使い方';
+  const sub   = lang==='en' ? 'Inventory System Manual' : lang==='zh' ? 'Inventory System Manual' : 'Inventory System Manual';
+  const appLink = lang==='en' ? 'Open App' : lang==='zh' ? '打开应用' : 'アプリを開く';
+
+  return (
+    <div
+      style={{
+        position:'fixed', inset:0, background:'rgba(0,0,0,0.5)',
+        display:'flex', alignItems:'center', justifyContent:'center',
+        zIndex:200, padding:'1rem',
+      }}
+      onClick={e => { if(e.target===e.currentTarget) onClose(); }}
+    >
+      <div style={{
+        background:'var(--bg)', borderRadius:'var(--radius)', border:'0.5px solid var(--border)',
+        width:'100%', maxWidth:480, maxHeight:'90vh', overflowY:'auto', position:'relative',
+        padding:'1.25rem',
+      }}>
+        {/* Close */}
+        <button
+          onClick={onClose}
+          style={{position:'absolute',top:12,right:14,background:'none',border:'none',fontSize:20,color:'var(--text-2)',cursor:'pointer',lineHeight:1}}
+        >×</button>
+
+        {/* Header */}
+        <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:'1rem'}}>
+          <div style={{width:36,height:36,background:'#D85A30',borderRadius:9,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+            <i className="ti ti-clipboard-list" style={{fontSize:18,color:'white'}} aria-hidden="true" />
+          </div>
+          <div>
+            <div style={{fontSize:15,fontWeight:500,color:'var(--text)'}}>{title}</div>
+            <div style={{fontSize:11,color:'var(--text-2)'}}>{sub}</div>
+          </div>
+        </div>
+
+        {/* Steps */}
+        {steps.map((step, i) => (
+          <div key={i} style={{background:'var(--bg)',border:'0.5px solid var(--border)',borderRadius:'var(--radius)',marginBottom:8,overflow:'hidden'}}>
+            <div
+              onClick={() => setOpenStep(openStep===i ? null : i)}
+              style={{display:'flex',alignItems:'center',gap:10,padding:'12px 14px',cursor:'pointer',background:openStep===i?'var(--bg-2)':'var(--bg)'}}
+            >
+              <div style={{width:32,height:32,borderRadius:'50%',background:step.color,color:'white',fontSize:13,fontWeight:500,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+                {step.num}
+              </div>
+              <div style={{flex:1}}>
+                <div style={{fontSize:11,color:'#D85A30',fontWeight:500,letterSpacing:'0.05em',textTransform:'uppercase',marginBottom:1}}>Step {i+1}</div>
+                <div style={{fontSize:14,fontWeight:500,color:'var(--text)'}}>{step.title}</div>
+                <div style={{fontSize:11,color:'var(--text-2)'}}>{step.sub}</div>
+              </div>
+              <span style={{fontSize:16,color:'var(--text-2)',transform:openStep===i?'rotate(90deg)':'none',transition:'transform 0.2s',display:'inline-block'}}>›</span>
+            </div>
+            {openStep === i && (
+              <div style={{padding:'0 14px 14px',borderTop:'0.5px solid var(--border)'}}>
+                <p style={{fontSize:13,color:'var(--text)',lineHeight:1.7,marginTop:12}}>{step.body}</p>
+                <div style={{background:'#FAECE7',borderRadius:8,padding:'8px 12px',marginTop:10,display:'flex',gap:8,alignItems:'flex-start'}}>
+                  <i className="ti ti-info-circle" style={{fontSize:14,color:'#D85A30',flexShrink:0,marginTop:1}} aria-hidden="true" />
+                  <p style={{fontSize:12,color:'#993C1D',lineHeight:1.6,margin:0}}>{step.tip}</p>
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+
+        {/* App link */}
+        <div style={{marginTop:14,background:'var(--bg-2)',borderRadius:'var(--radius)',padding:'12px 16px',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+          <div style={{fontSize:13,color:'var(--text-2)'}}>{appLink}</div>
+          <a
+            href="https://lively-cat-production.up.railway.app"
+            target="_blank" rel="noreferrer"
+            style={{background:'#D85A30',color:'white',padding:'8px 14px',borderRadius:8,fontSize:12,fontWeight:500,textDecoration:'none'}}
+          >
+            lively-cat-production.up.railway.app →
+          </a>
         </div>
       </div>
     </div>
