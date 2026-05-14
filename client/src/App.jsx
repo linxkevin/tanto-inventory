@@ -450,8 +450,7 @@ function AdminTab({ lang, t, items, sessions, adminEmail, setAdminEmail, showToa
       }
     });
     if (rows.length === 1) { showToast('発注が必要なアイテムはありません。'); return; }
-    const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('
-');
+    const csv = rows.map(r => r.map(v => '"' + String(v).replace(/"/g, '""') + '"').join(',')).join('\n');
     const bom = '﻿'; // UTF-8 BOM for Excel/Sheets compatibility
     const blob = new Blob([bom + csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
