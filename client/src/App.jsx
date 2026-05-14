@@ -422,6 +422,47 @@ function AdminTab({ lang, t, items, sessions, adminEmail, setAdminEmail, showToa
       .catch(() => showToast(t('toastCopyFail')));
   }
 
+  function downloadCsv() {
+    if (!latestSession) { showToast(t('toastNoSession')); return; }
+    const items = latestSession.items;
+    const rows = [
+      ['アイテム名', 'Item Name', '品名', '業者/Vendor', '現在庫/Current', '規定数/Min', '発注数/Order Qty', '単位/Unit', '担当者/Staff', '時刻/Time'],
+    ];
+    // Kitchen items first, then server
+    const kitchen = items.filter(i => i.vendor !== 'サーバー棚卸し');
+    const server  = items.filter(i => i.vendor === 'サーバー棚卸し');
+    [...kitchen, ...server].forEach(item => {
+      const cur = item.current_stock || 0;
+      const needed = Math.max(0, item.min_stock - cur);
+      if (needed > 0) {
+        rows.push([
+          item.name_ja,
+          item.name_en,
+          item.name_zh,
+          item.vendor,
+          cur,
+          item.min_stock,
+          needed,
+          item.unit,
+          item.staff_stamp || '',
+          item.stamp_time || '',
+        ]);
+      }
+    });
+    if (rows.length === 1) { showToast('発注が必要なアイテムはありません。'); return; }
+    const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('
+');
+    const bom = '﻿'; // UTF-8 BOM for Excel/Sheets compatibility
+    const blob = new Blob([bom + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `tanto_order_${latestSession.date}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast(lang==='en' ? 'CSV downloaded.' : lang==='zh' ? 'CSV已下载。' : 'CSVをダウンロードしました。');
+  }
+
   // Summary
   let ok=0, low=0, ord=0;
   const sessionItems = latestSession?.items || [];
@@ -456,6 +497,7 @@ function AdminTab({ lang, t, items, sessions, adminEmail, setAdminEmail, showToa
       <div className="section-header">
         <div className="section-title">{t('adminTitle')}</div>
         <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+          <button className="btn-outline" onClick={downloadCsv}><i className="ti ti-file-spreadsheet" /> {lang==='en'?'Export CSV':lang==='zh'?'导出CSV':'CSV出力'}</button>
           <button className="btn-outline" onClick={copyOrder}><i className="ti ti-copy" /> {t('copyBtn')}</button>
           <button className="btn-outline" onClick={openGmailModal}><i className="ti ti-mail" /> {t('gmailBtn')}</button>
         </div>
