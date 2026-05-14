@@ -647,9 +647,55 @@ function HistoryTab({ lang, t, sessions, showToast }) {
 // ─────────────────────────────────────────────────────
 // SETTINGS TAB
 // ─────────────────────────────────────────────────────
+const ADMIN_PASSWORD = 'tanto1109';
+
 function SettingsTab({ lang, t, items, setItems, adminEmail, setAdminEmail, showToast }) {
   const [email, setEmail] = useState(adminEmail);
   const [saving, setSaving] = useState(false);
+  const [unlocked, setUnlocked] = useState(false);
+  const [pwInput, setPwInput]   = useState('');
+  const [pwError, setPwError]   = useState(false);
+
+  function tryUnlock() {
+    if (pwInput === ADMIN_PASSWORD) {
+      setUnlocked(true);
+      setPwError(false);
+    } else {
+      setPwError(true);
+      setPwInput('');
+    }
+  }
+
+  // Password gate
+  if (!unlocked) return (
+    <div style={{maxWidth:360,margin:'4rem auto',textAlign:'center'}}>
+      <div style={{fontSize:40,marginBottom:'1rem'}}>🔒</div>
+      <div style={{fontSize:16,fontWeight:500,marginBottom:8}}>
+        {lang==='en' ? 'Admin Access Required' : lang==='zh' ? '需要管理员权限' : '管理者専用エリア'}
+      </div>
+      <div style={{fontSize:13,color:'var(--text-2)',marginBottom:'1.5rem'}}>
+        {lang==='en' ? 'Enter the admin password to continue.' : lang==='zh' ? '请输入管理员密码。' : 'パスワードを入力してください。'}
+      </div>
+      <input
+        className="form-input"
+        type="password"
+        placeholder={lang==='en' ? 'Password' : lang==='zh' ? '密码' : 'パスワード'}
+        value={pwInput}
+        onChange={e => { setPwInput(e.target.value); setPwError(false); }}
+        onKeyDown={e => e.key === 'Enter' && tryUnlock()}
+        style={{marginBottom:8,textAlign:'center',fontSize:16,letterSpacing:4}}
+        autoFocus
+      />
+      {pwError && (
+        <div style={{fontSize:12,color:'#A32D2D',marginBottom:8}}>
+          {lang==='en' ? 'Incorrect password.' : lang==='zh' ? '密码错误。' : 'パスワードが違います。'}
+        </div>
+      )}
+      <button className="btn-primary" style={{width:'100%'}} onClick={tryUnlock}>
+        {lang==='en' ? 'Unlock' : lang==='zh' ? '解锁' : 'ロック解除'}
+      </button>
+    </div>
+  );
 
   async function saveAll() {
     setSaving(true);
