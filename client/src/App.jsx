@@ -155,7 +155,10 @@ function StaffTab({ lang, t, items, location, adminEmail, onComplete, showToast 
   const [counts, setCounts]           = useState({}); // { itemId: value }
   const [completedInfo, setCompletedInfo] = useState(null); // { staffName, categories, date, time, location }
 
-  const CATEGORIES = ['肉・海鮮','野菜・卵','麺・米','調味料','乾物・ストック','冷凍・その他','サーバー'];
+  // Derive categories from items dynamically (preserving default order)
+  const DEFAULT_ORDER = ['肉・海鮮','野菜・卵','麺・米','調味料','乾物・ストック','冷凍・その他','サーバー'];
+  const itemCats = [...new Set(items.map(i => i.category).filter(Boolean))];
+  const CATEGORIES = [...new Set([...DEFAULT_ORDER, ...itemCats])];
   const CAT_LABELS = {
     ja: {'肉・海鮮':'肉・海鮮','野菜・卵':'野菜・卵','麺・米':'麺・米','調味料':'調味料','乾物・ストック':'乾物・ストック','冷凍・その他':'冷凍・その他','サーバー':'サーバー'},
     en: {'肉・海鮮':'Meat & Seafood','野菜・卵':'Vegetables & Eggs','麺・米':'Noodles & Rice','調味料':'Seasonings','乾物・ストック':'Dry Goods','冷凍・その他':'Frozen & Other','サーバー':'Server (Bar)'},
@@ -839,6 +842,14 @@ function HistoryTab({ lang, t, sessions, showToast }) {
 function SettingsTab({ lang, t, items, setItems, adminEmail, setAdminEmail, showToast }) {
   const [email, setEmail] = useState(adminEmail);
   const [saving, setSaving] = useState(false);
+  const [categories, setCategories] = useState(() => {
+    // Derive current categories from items + built-in defaults
+    const fromItems = [...new Set(items.map(i => i.category).filter(Boolean))];
+    const defaults = ['肉・海鮮','野菜・卵','麺・米','調味料','乾物・ストック','冷凍・その他','サーバー'];
+    const merged = [...new Set([...defaults, ...fromItems])];
+    return merged;
+  });
+  const [newCatInput, setNewCatInput] = useState('');
 
   async function saveAll() {
     setSaving(true);
@@ -853,7 +864,23 @@ function SettingsTab({ lang, t, items, setItems, adminEmail, setAdminEmail, show
     }
   }
 
-  const ALL_CATEGORIES = ['肉・海鮮','野菜・卵','麺・米','調味料','乾物・ストック','冷凍・その他','サーバー'];
+  function addCategory() {
+    const name = newCatInput.trim();
+    if (!name) return;
+    if (categories.includes(name)) { showToast(lang==='en'?'Category already exists.':lang==='zh'?'类别已存在。':'そのカテゴリーは既に存在します。'); return; }
+    setCategories(c => [...c, name]);
+    setNewCatInput('');
+    showToast(lang==='en'?'Category added.':lang==='zh'?'类别已添加。':'カテゴリーを追加しました。');
+  }
+
+  function deleteCategory(cat) {
+    const inUse = items.some(i => i.category === cat);
+    if (inUse) { showToast(lang==='en'?'Cannot delete: items are using this category.':lang==='zh'?'无法删除：该类别下有商品。':'このカテゴリーを使用中のアイテムがあるため削除できません。'); return; }
+    setCategories(c => c.filter(x => x !== cat));
+    showToast(lang==='en'?'Category deleted.':lang==='zh'?'类别已删除。':'カテゴリーを削除しました。');
+  }
+
+  const ALL_CATEGORIES = categories;
 
   async function patchItem(item, field, value) {
     const updated = { unit: item.unit, min_stock: item.min_stock, category: item.category, [field]: value };
@@ -913,6 +940,46 @@ function SettingsTab({ lang, t, items, setItems, adminEmail, setAdminEmail, show
         })}
       </div>
 
+      {/* Category Management */}
+      <div style={{marginTop:'1.5rem',paddingTop:'1rem',borderTop:'0.5px solid var(--border)'}}>
+        <div style={{fontSize:14,fontWeight:500,marginBottom:12}}>
+          {lang==='en'?'Category Management':lang==='zh'?'类别管理':'カテゴリー管理'}
+        </div>
+
+        {/* Existing categories */}
+        <div style={{display:'flex',flexWrap:'wrap',gap:8,marginBottom:12}}>
+          {categories.map(cat => (
+            <div key={cat} style={{display:'flex',alignItems:'center',gap:6,background:'var(--bg-2)',border:'0.5px solid var(--border)',borderRadius:20,padding:'4px 12px'}}>
+              <span style={{fontSize:13,color:'var(--text)'}}>{cat}</span>
+              <button
+                onClick={() => deleteCategory(cat)}
+                style={{background:'none',border:'none',color:'var(--text-2)',cursor:'pointer',fontSize:14,lineHeight:1,padding:0,display:'flex',alignItems:'center'}}
+                title={lang==='en'?'Delete':lang==='zh'?'删除':'削除'}
+              >×</button>
+            </div>
+          ))}
+        </div>
+
+        {/* Add new category */}
+        <div style={{display:'flex',gap:8}}>
+          <input
+            className="form-input"
+            value={newCatInput}
+            onChange={e => setNewCatInput(e.target.value)}
+            onKeyDown={e => e.key==='Enter' && addCategory()}
+            placeholder={lang==='en'?'New category name...':lang==='zh'?'新类别名称...':'新しいカテゴリー名...'}
+            style={{flex:1}}
+          />
+          <button className="btn-primary" onClick={addCategory} style={{whiteSpace:'nowrap'}}>
+            <i className="ti ti-plus" aria-hidden="true" /> {lang==='en'?'Add':lang==='zh'?'添加':'追加'}
+          </button>
+        </div>
+        <div style={{fontSize:11,color:'var(--text-2)',marginTop:6}}>
+          {lang==='en'?'Categories in use cannot be deleted.':lang==='zh'?'正在使用的类别无法删除。':'使用中のカテゴリーは削除できません。'}
+        </div>
+      </div>
+
+      {/* Email Settings */}
       <div style={{marginTop:'1.5rem',paddingTop:'1rem',borderTop:'0.5px solid var(--border)'}}>
         <div style={{fontSize:14,fontWeight:500,marginBottom:8}}>{t('emailTitle')}</div>
         <div className="form-row">
