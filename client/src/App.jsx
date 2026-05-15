@@ -180,10 +180,10 @@ function StaffTab({ lang, t, items, location, adminEmail, categories: catProp, o
 
   function toggleCat(c) {
     const name = getCatName(c);
-    setSelected(s => s.map(getCatName).includes(name) ? s.filter(x=>getCatName(x)!==name) : [...s, c]);
+    setSelected(s => s.includes(name) ? s.filter(x=>x!==name) : [...s, name]);
   }
   function toggleAll() {
-    setSelected(s => s.length === CATEGORIES.length ? [] : [...CATEGORIES]);
+    setSelected(s => s.length === CATEGORIES.length ? [] : CATEGORIES.map(getCatName));
   }
 
   function startCounting() {
@@ -276,8 +276,8 @@ function StaffTab({ lang, t, items, location, adminEmail, categories: catProp, o
     const catLabelsZh = {'肉・海鮮':'肉类・海鲜','野菜・卵':'蔬菜・鸡蛋','麺・米':'面条・米饭','調味料':'调味料','乾物・ストック':'干货','冷凍・その他':'冷冻・其他','サーバー':'服务员（酒水）'};
     const cl = lang==='en'?catLabelsEn:lang==='zh'?catLabelsZh:catLabelsJa;
 
-    const catListJa = completedInfo.categories.map(c=>catLabelsJa[c]||c).join('、');
-    const catListEn = completedInfo.categories.map(c=>catLabelsEn[c]||c).join(', ');
+    const catListJa = completedInfo.categories.map(c=>{const n=typeof c==='string'?c:c.name; return catLabelsJa[n]||n;}).join('、');
+    const catListEn = completedInfo.categories.map(c=>{const n=typeof c==='string'?c:c.name; return catLabelsEn[n]||n;}).join(', ');
     const subject = `【Tanto棚卸し通知】${completedInfo.location}店 ${completedInfo.date} ${completedInfo.time}`;
     const body = `Tanto Gyoza and Ramen Bar — 棚卸し完了通知
 
@@ -312,11 +312,11 @@ function StaffTab({ lang, t, items, location, adminEmail, categories: catProp, o
             {lang==='en'?'Completed Categories':lang==='zh'?'已完成类别':'完了カテゴリー'}
           </div>
           <div style={{display:'flex',flexWrap:'wrap',gap:6}}>
-            {completedInfo.categories.map(c=>(
-              <span key={c} style={{fontSize:12,fontWeight:500,background:'#E1F5EE',color:'#085041',padding:'3px 10px',borderRadius:10}}>
-                ✓ {cl[c]||c}
+            {completedInfo.categories.map(c=>{ const n=typeof c==='string'?c:c.name; return (
+              <span key={n} style={{fontSize:12,fontWeight:500,background:'#E1F5EE',color:'#085041',padding:'3px 10px',borderRadius:10}}>
+                ✓ {cl[n]||n}
               </span>
-            ))}
+            );})}
           </div>
         </div>
 
@@ -362,8 +362,8 @@ function StaffTab({ lang, t, items, location, adminEmail, categories: catProp, o
       <div className="vendor-grid">
         {CATEGORIES.map(c => {
           const its = getCatItems(c);
-          const isSel = selected.includes(c);
-          const isDone = !!savedVendors[c];
+          const isSel = selected.includes(getCatName(c));
+          const isDone = !!savedVendors[getCatName(c)];
           return (
             <div
               key={c}
@@ -417,8 +417,8 @@ function StaffTab({ lang, t, items, location, adminEmail, categories: catProp, o
       {/* Category tabs */}
       <div className="vendor-tabs">
         {selected.map(c => {
-          const isDone = !!savedVendors[c];
-          const isActive = c === activeVendor;
+          const isDone = !!savedVendors[getCatName(c)];
+          const isActive = getCatName(c) === activeVendor;
           return (
             <button
               key={c}
@@ -957,7 +957,7 @@ function SettingsTab({ lang, t, items, setItems, adminEmail, setAdminEmail, cate
                   onChange={e => patchItem(item, 'category', e.target.value)}
                   style={{width:130,fontSize:11,textAlign:'right'}}
                 >
-                  {ALL_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                  {ALL_CATEGORIES.map(c => { const n=typeof c==='string'?c:c.name; return <option key={n} value={n}>{n}</option>; })}
                 </select>
               </div>
               <div className="scard-row">
