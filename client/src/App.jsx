@@ -25,6 +25,8 @@ export default function App() {
   const [toastMsg, showToast] = useToast();
   const [showManual, setShowManual] = useState(false);
   const [adminUnlocked, setAdminUnlocked] = useState(false);
+  const DEFAULT_CATEGORIES = ['肉・海鮮','野菜・卵','麺・米','調味料','乾物・ストック','冷凍・その他','サーバー'];
+  const [categories, setCategories] = useState(DEFAULT_CATEGORIES);
 
   const t = (k) => UI[lang][k] || UI.ja[k] || k;
 
@@ -35,6 +37,10 @@ export default function App() {
         setItems(its);
         setSessions(sess);
         setAdminEmail(settings.adminEmail || '');
+        // Merge categories from items with defaults
+        const defaults = ['肉・海鮮','野菜・卵','麺・米','調味料','乾物・ストック','冷凍・その他','サーバー'];
+        const fromItems = [...new Set(its.map(i => i.category).filter(Boolean))];
+        setCategories([...new Set([...defaults, ...fromItems])]);
       })
       .catch(() => showToast(t('toastError')))
       .finally(() => setLoading(false));
@@ -113,7 +119,7 @@ export default function App() {
       {location && tab === 'staff' && (
         <StaffTab
           lang={lang} t={t} items={items} location={location}
-          adminEmail={adminEmail}
+          adminEmail={adminEmail} categories={categories}
           onComplete={() => {
             refreshSessions();
           }}
@@ -127,6 +133,7 @@ export default function App() {
               location={location} activeTab={tab} setActiveTab={setTab}
               adminEmail={adminEmail} setAdminEmail={setAdminEmail}
               setItems={setItems} showToast={showToast}
+              categories={categories} setCategories={setCategories}
             />
           : <AdminLock
               lang={lang}
@@ -146,7 +153,7 @@ export default function App() {
 // ─────────────────────────────────────────────────────
 // STAFF TAB
 // ─────────────────────────────────────────────────────
-function StaffTab({ lang, t, items, location, adminEmail, onComplete, showToast }) {
+function StaffTab({ lang, t, items, location, adminEmail, categories: catProp, onComplete, showToast }) {
   const [screen, setScreen]           = useState('top'); // 'top' | 'count' | 'done'
   const [staffName, setStaffName]     = useState('');
   const [selected, setSelected]       = useState([]);
@@ -155,10 +162,8 @@ function StaffTab({ lang, t, items, location, adminEmail, onComplete, showToast 
   const [counts, setCounts]           = useState({}); // { itemId: value }
   const [completedInfo, setCompletedInfo] = useState(null); // { staffName, categories, date, time, location }
 
-  // Derive categories from items dynamically (preserving default order)
-  const DEFAULT_ORDER = ['肉・海鮮','野菜・卵','麺・米','調味料','乾物・ストック','冷凍・その他','サーバー'];
-  const itemCats = [...new Set(items.map(i => i.category).filter(Boolean))];
-  const CATEGORIES = [...new Set([...DEFAULT_ORDER, ...itemCats])];
+  // Use categories from App state (managed in settings)
+  const CATEGORIES = catProp || ['肉・海鮮','野菜・卵','麺・米','調味料','乾物・ストック','冷凍・その他','サーバー'];
   const CAT_LABELS = {
     ja: {'肉・海鮮':'肉・海鮮','野菜・卵':'野菜・卵','麺・米':'麺・米','調味料':'調味料','乾物・ストック':'乾物・ストック','冷凍・その他':'冷凍・その他','サーバー':'サーバー'},
     en: {'肉・海鮮':'Meat & Seafood','野菜・卵':'Vegetables & Eggs','麺・米':'Noodles & Rice','調味料':'Seasonings','乾物・ストック':'Dry Goods','冷凍・その他':'Frozen & Other','サーバー':'Server (Bar)'},
@@ -167,11 +172,15 @@ function StaffTab({ lang, t, items, location, adminEmail, onComplete, showToast 
   const CAT_ICONS = {'肉・海鮮':'ti-meat','野菜・卵':'ti-leaf','麺・米':'ti-bowl','調味料':'ti-salt','乾物・ストック':'ti-package','冷凍・その他':'ti-snowflake','サーバー':'ti-glass-full'};
   const CAT_COLORS = {'肉・海鮮':'#E24B4A','野菜・卵':'#1D9E75','麺・米':'#BA7517','調味料':'#378ADD','乾物・ストック':'#534AB7','冷凍・その他':'#888780','サーバー':'#534AB7'};
 
-  function catLabel(c) { return (CAT_LABELS[lang]||CAT_LABELS.ja)[c]||c; }
-  function getCatItems(c) { return items.filter(i => i.category === c); }
+  function getCatName(c) { return typeof c==='string' ? c : c.name; }
+  function getCatIcon(c) { return typeof c==='object' && c.icon ? c.icon : (CAT_ICONS[getCatName(c)] || 'ti-tag'); }
+  function getCatColor(c) { return CAT_COLORS[getCatName(c)] || '#888780'; }
+  function catLabel(c) { const n=getCatName(c); return (CAT_LABELS[lang]||CAT_LABELS.ja)[n]||n; }
+  function getCatItems(c) { return items.filter(i => i.category === getCatName(c)); }
 
   function toggleCat(c) {
-    setSelected(s => s.includes(c) ? s.filter(x=>x!==c) : [...s, c]);
+    const name = getCatName(c);
+    setSelected(s => s.map(getCatName).includes(name) ? s.filter(x=>getCatName(x)!==name) : [...s, c]);
   }
   function toggleAll() {
     setSelected(s => s.length === CATEGORIES.length ? [] : [...CATEGORIES]);
@@ -361,8 +370,8 @@ function StaffTab({ lang, t, items, location, adminEmail, onComplete, showToast 
               className={`vendor-tile${isSel?' selected':''}${isDone?' done':''}`}
               onClick={() => toggleCat(c)}
             >
-              <div style={{width:36,height:36,borderRadius:9,background:isSel?CAT_COLORS[c]:'var(--bg-2)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,transition:'all 0.15s'}}>
-                <i className={`ti ${CAT_ICONS[c]}`} style={{fontSize:18,color:isSel?'white':CAT_COLORS[c]}} aria-hidden="true" />
+              <div style={{width:36,height:36,borderRadius:9,background:isSel?getCatColor(c):'var(--bg-2)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,transition:'all 0.15s'}}>
+                <i className={`ti ${getCatIcon(c)}`} style={{fontSize:18,color:isSel?'white':getCatColor(c)}} aria-hidden="true" />
               </div>
               <div className="vt-info">
                 <div className="vt-name">{catLabel(c)}</div>
@@ -414,11 +423,11 @@ function StaffTab({ lang, t, items, location, adminEmail, onComplete, showToast 
             <button
               key={c}
               className={`vtab${isActive?' active':''}${isDone?' completed':''}`}
-              style={isActive ? {background:CAT_COLORS[c],color:'white',borderColor:CAT_COLORS[c]} : {}}
+              style={isActive ? {background:getCatColor(c),color:'white',borderColor:getCatColor(c)} : {}}
               onClick={() => setActiveVendor(c)}
             >
               {isDone && <span className="vtab-dot" />}
-              <i className={`ti ${CAT_ICONS[c]}`} style={{fontSize:12}} aria-hidden="true" />
+              <i className={`ti ${getCatIcon(c)}`} style={{fontSize:12}} aria-hidden="true" />
               {catLabel(c)}
             </button>
           );
@@ -839,17 +848,11 @@ function HistoryTab({ lang, t, sessions, showToast }) {
 // ─────────────────────────────────────────────────────
 // SETTINGS TAB
 // ─────────────────────────────────────────────────────
-function SettingsTab({ lang, t, items, setItems, adminEmail, setAdminEmail, showToast }) {
+function SettingsTab({ lang, t, items, setItems, adminEmail, setAdminEmail, categories, setCategories, showToast }) {
   const [email, setEmail] = useState(adminEmail);
   const [saving, setSaving] = useState(false);
-  const [categories, setCategories] = useState(() => {
-    // Derive current categories from items + built-in defaults
-    const fromItems = [...new Set(items.map(i => i.category).filter(Boolean))];
-    const defaults = ['肉・海鮮','野菜・卵','麺・米','調味料','乾物・ストック','冷凍・その他','サーバー'];
-    const merged = [...new Set([...defaults, ...fromItems])];
-    return merged;
-  });
   const [newCatInput, setNewCatInput] = useState('');
+  const [newCatIcon, setNewCatIcon] = useState('ti-tag');
 
   async function saveAll() {
     setSaving(true);
@@ -864,23 +867,49 @@ function SettingsTab({ lang, t, items, setItems, adminEmail, setAdminEmail, show
     }
   }
 
+  // Icon options for new categories
+  const ICON_OPTIONS = [
+    {icon:'ti-tag', label:'汎用'},
+    {icon:'ti-meat', label:'肉'},
+    {icon:'ti-leaf', label:'野菜'},
+    {icon:'ti-bowl', label:'麺'},
+    {icon:'ti-salt', label:'調味料'},
+    {icon:'ti-package', label:'乾物'},
+    {icon:'ti-snowflake', label:'冷凍'},
+    {icon:'ti-glass-full', label:'ドリンク'},
+    {icon:'ti-fish', label:'魚'},
+    {icon:'ti-egg', label:'卵'},
+    {icon:'ti-bread', label:'パン'},
+    {icon:'ti-milk', label:'乳製品'},
+    {icon:'ti-lemon', label:'果物'},
+    {icon:'ti-soup', label:'スープ'},
+    {icon:'ti-bottle', label:'ボトル'},
+  ];
+
   function addCategory() {
     const name = newCatInput.trim();
     if (!name) return;
-    if (categories.includes(name)) { showToast(lang==='en'?'Category already exists.':lang==='zh'?'类别已存在。':'そのカテゴリーは既に存在します。'); return; }
-    setCategories(c => [...c, name]);
+    if (categories.some(c => (typeof c==='string'?c:c.name) === name)) {
+      showToast(lang==='en'?'Category already exists.':lang==='zh'?'类别已存在。':'そのカテゴリーは既に存在します。');
+      return;
+    }
+    setCategories(c => [...c, {name, icon: newCatIcon}]);
     setNewCatInput('');
+    setNewCatIcon('ti-tag');
     showToast(lang==='en'?'Category added.':lang==='zh'?'类别已添加。':'カテゴリーを追加しました。');
   }
 
+  function getCatName(c) { return typeof c==='string' ? c : c.name; }
+
   function deleteCategory(cat) {
-    const inUse = items.some(i => i.category === cat);
+    const catName = getCatName(cat);
+    const inUse = items.some(i => i.category === catName);
     if (inUse) { showToast(lang==='en'?'Cannot delete: items are using this category.':lang==='zh'?'无法删除：该类别下有商品。':'このカテゴリーを使用中のアイテムがあるため削除できません。'); return; }
-    setCategories(c => c.filter(x => x !== cat));
+    setCategories(c => c.filter(x => getCatName(x) !== catName));
     showToast(lang==='en'?'Category deleted.':lang==='zh'?'类别已删除。':'カテゴリーを削除しました。');
   }
 
-  const ALL_CATEGORIES = categories;
+  const ALL_CATEGORIES = categories || [];
 
   async function patchItem(item, field, value) {
     const updated = { unit: item.unit, min_stock: item.min_stock, category: item.category, [field]: value };
@@ -948,20 +977,25 @@ function SettingsTab({ lang, t, items, setItems, adminEmail, setAdminEmail, show
 
         {/* Existing categories */}
         <div style={{display:'flex',flexWrap:'wrap',gap:8,marginBottom:12}}>
-          {categories.map(cat => (
-            <div key={cat} style={{display:'flex',alignItems:'center',gap:6,background:'var(--bg-2)',border:'0.5px solid var(--border)',borderRadius:20,padding:'4px 12px'}}>
-              <span style={{fontSize:13,color:'var(--text)'}}>{cat}</span>
-              <button
-                onClick={() => deleteCategory(cat)}
-                style={{background:'none',border:'none',color:'var(--text-2)',cursor:'pointer',fontSize:14,lineHeight:1,padding:0,display:'flex',alignItems:'center'}}
-                title={lang==='en'?'Delete':lang==='zh'?'删除':'削除'}
-              >×</button>
-            </div>
-          ))}
+          {(categories||[]).map(cat => {
+            const name = typeof cat==='string'?cat:cat.name;
+            const icon = typeof cat==='string'?null:cat.icon;
+            return (
+              <div key={name} style={{display:'flex',alignItems:'center',gap:6,background:'var(--bg-2)',border:'0.5px solid var(--border)',borderRadius:20,padding:'4px 12px'}}>
+                {icon && <i className={`ti ${icon}`} aria-hidden="true" style={{fontSize:13,color:'var(--text-2)'}} />}
+                <span style={{fontSize:13,color:'var(--text)'}}>{name}</span>
+                <button
+                  onClick={() => deleteCategory(cat)}
+                  style={{background:'none',border:'none',color:'var(--text-2)',cursor:'pointer',fontSize:14,lineHeight:1,padding:0,display:'flex',alignItems:'center'}}
+                  title={lang==='en'?'Delete':lang==='zh'?'删除':'削除'}
+                >×</button>
+              </div>
+            );
+          })}
         </div>
 
         {/* Add new category */}
-        <div style={{display:'flex',gap:8}}>
+        <div style={{display:'flex',gap:8,marginBottom:8}}>
           <input
             className="form-input"
             value={newCatInput}
@@ -973,6 +1007,19 @@ function SettingsTab({ lang, t, items, setItems, adminEmail, setAdminEmail, show
           <button className="btn-primary" onClick={addCategory} style={{whiteSpace:'nowrap'}}>
             <i className="ti ti-plus" aria-hidden="true" /> {lang==='en'?'Add':lang==='zh'?'添加':'追加'}
           </button>
+        </div>
+        {/* Icon picker */}
+        <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:8}}>
+          {ICON_OPTIONS.map(opt => (
+            <button
+              key={opt.icon}
+              onClick={() => setNewCatIcon(opt.icon)}
+              title={opt.label}
+              style={{width:34,height:34,borderRadius:'var(--radius-sm)',border:newCatIcon===opt.icon?'2px solid #D85A30':'0.5px solid var(--border)',background:newCatIcon===opt.icon?'#FAECE7':'var(--bg-2)',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center'}}
+            >
+              <i className={`ti ${opt.icon}`} style={{fontSize:16,color:newCatIcon===opt.icon?'#D85A30':'var(--text-2)'}} aria-hidden="true" />
+            </button>
+          ))}
         </div>
         <div style={{fontSize:11,color:'var(--text-2)',marginTop:6}}>
           {lang==='en'?'Categories in use cannot be deleted.':lang==='zh'?'正在使用的类别无法删除。':'使用中のカテゴリーは削除できません。'}
@@ -1259,7 +1306,7 @@ function AdminLock({ lang, onUnlock }) {
 // ─────────────────────────────────────────────────────
 // ADMIN AREA (sub-tabs: 発注 / 履歴 / 設定)
 // ─────────────────────────────────────────────────────
-function AdminArea({ lang, t, items, sessions, location, activeTab, setActiveTab, adminEmail, setAdminEmail, setItems, showToast }) {
+function AdminArea({ lang, t, items, sessions, location, activeTab, setActiveTab, adminEmail, setAdminEmail, setItems, showToast, categories, setCategories }) {
   const subTabs = [
     { key:'admin',    labelJa:'発注',  labelEn:'Orders',   labelZh:'订货' },
     { key:'history',  labelJa:'履歴',  labelEn:'History',  labelZh:'历史' },
@@ -1312,6 +1359,7 @@ function AdminArea({ lang, t, items, sessions, location, activeTab, setActiveTab
         <SettingsTab
           lang={lang} t={t} items={items} setItems={setItems}
           adminEmail={adminEmail} setAdminEmail={setAdminEmail}
+          categories={categories} setCategories={setCategories}
           showToast={showToast}
         />
       )}
