@@ -295,7 +295,7 @@ function StaffTab({ lang, t, items, location, onComplete, showToast }) {
       </div>
 
       <button className="select-all-btn" onClick={toggleAll}>
-        {selected.length === allVendors.length ? t('deselectAll') : t('selectAll')}
+        {selected.length === CATEGORIES.length ? t('deselectAll') : t('selectAll')}
       </button>
       <button
         className="start-btn"
@@ -309,7 +309,7 @@ function StaffTab({ lang, t, items, location, onComplete, showToast }) {
 
   // ── COUNT SCREEN ──
   const activeItems = getVendorItems(activeVendor);
-  const isServer = activeVendor === SERVER_VENDOR;
+  const isServer = activeVendor === 'サーバー';
 
   return (
     <div>
