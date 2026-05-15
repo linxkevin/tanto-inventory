@@ -26,8 +26,15 @@ async function initDB() {
       name_zh TEXT NOT NULL,
       unit TEXT NOT NULL,
       vendor TEXT NOT NULL,
-      min_stock INTEGER NOT NULL DEFAULT 2
+      min_stock INTEGER NOT NULL DEFAULT 2,
+      category TEXT NOT NULL DEFAULT '調味料'
     );
+
+    -- Add category column if it doesn't exist (for existing DBs)
+    DO $$ BEGIN
+      ALTER TABLE items ADD COLUMN IF NOT EXISTS category TEXT NOT NULL DEFAULT '調味料';
+    EXCEPTION WHEN others THEN NULL;
+    END $$;
 
     CREATE TABLE IF NOT EXISTS sessions (
       id SERIAL PRIMARY KEY,
@@ -228,13 +235,13 @@ app.get('/api/items', async (req, res) => {
   }
 });
 
-// PATCH item settings (unit / min_stock)
+// PATCH item settings (unit / min_stock / category)
 app.patch('/api/items/:id', async (req, res) => {
-  const { unit, min_stock } = req.body;
+  const { unit, min_stock, category } = req.body;
   try {
     const { rows } = await pool.query(
-      'UPDATE items SET unit=$1, min_stock=$2 WHERE id=$3 RETURNING *',
-      [unit, min_stock, req.params.id]
+      'UPDATE items SET unit=$1, min_stock=$2, category=$3 WHERE id=$4 RETURNING *',
+      [unit, min_stock, category || '調味料', req.params.id]
     );
     res.json(rows[0]);
   } catch (e) {
@@ -352,9 +359,40 @@ app.post('/api/settings', async (req, res) => {
   }
 });
 
+// ── Seed categories ─────────────────────────────────
+async function seedCategories() {
+  const categoryMap = {
+    // 肉・海鮮
+    '肉・海鮮': [80,81,82,83,84,85,86,61,62,12,13,55],
+    // 野菜・卵
+    '野菜・卵': [93,94,95,96,97,98,99,100,101,102,103,104,105,106,107,108,109,110,111,112,113],
+    // 麺・米
+    '麺・米': [87,88,89,90,91,92,73],
+    // 調味料
+    '調味料': [1,2,3,5,6,9,10,15,17,29,36,37,38,39,40,41,42,43,44,46,47,48,49,50,51,52,53,54,56,57,60,72,75,77,78,79],
+    // 乾物・ストック
+    '乾物・ストック': [4,7,8,16,18,19,23,24,25,26,28,30,31,32,33,34,35,58,59,63,64,65,66],
+    // 冷凍・その他
+    '冷凍・その他': [11,14,20,27,74],
+    // サーバー
+    'サーバー': [200,201,202,203,204,205,206,207,208,209,210,211,212],
+  };
+
+  for (const [category, ids] of Object.entries(categoryMap)) {
+    for (const id of ids) {
+      await pool.query(
+        'UPDATE items SET category=$1 WHERE id=$2',
+        [category, id]
+      );
+    }
+  }
+  console.log('✅ Categories seeded');
+}
+
 // ── Start ─────────────────────────────────────────────
 app.listen(PORT, async () => {
   console.log(`🚀 Server running on port ${PORT}`);
   await initDB();
   await seedItems();
+  await seedCategories();
 });
