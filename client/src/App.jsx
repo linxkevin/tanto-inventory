@@ -316,7 +316,7 @@ function StaffTab({ lang, t, items, location, onComplete, showToast }) {
           {lang==='en'?'Notify Manager via Gmail':lang==='zh'?'通过 Gmail 通知管理员':'管理者へGmailで通知する'}
         </button>
         <div style={{fontSize:11,color:'var(--text-2)',marginBottom:'1.5rem'}}>
-          {lang==='en'?'Gmail opens with the notification pre-filled. Just enter the manager's email and send.':lang==='zh'?'Gmail 将自动填写通知内容，输入管理员邮箱后发送即可。':'Gmailが開きます。管理者のメールアドレスを入力して送信してください。'}
+          {lang==='en'?'Gmail opens with the notification pre-filled. Enter the manager email and send.':lang==='zh'?'Gmail 将自动填写通知内容，输入管理员邮箱后发送即可。':'Gmailが開きます。管理者のメールアドレスを入力して送信してください。'}
         </div>
 
         <button
