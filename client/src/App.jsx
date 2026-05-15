@@ -113,10 +113,8 @@ export default function App() {
       {location && tab === 'staff' && (
         <StaffTab
           lang={lang} t={t} items={items} location={location}
-          onComplete={(rec) => {
-            showToast(t('toastSubmit'));
+          onComplete={() => {
             refreshSessions();
-            setTab('admin');
           }}
           showToast={showToast}
         />
