@@ -35,8 +35,15 @@ async function initDB() {
       month TEXT NOT NULL,
       time TEXT NOT NULL,
       staff_name TEXT,
+      location TEXT NOT NULL DEFAULT 'Piikoi',
       created_at TIMESTAMPTZ DEFAULT NOW()
     );
+
+    -- Add location column if it doesn't exist (for existing DBs)
+    DO $$ BEGIN
+      ALTER TABLE sessions ADD COLUMN IF NOT EXISTS location TEXT NOT NULL DEFAULT 'Piikoi';
+    EXCEPTION WHEN others THEN NULL;
+    END $$;
 
     CREATE TABLE IF NOT EXISTS session_items (
       id SERIAL PRIMARY KEY,
@@ -237,14 +244,14 @@ app.patch('/api/items/:id', async (req, res) => {
 
 // POST new session (complete inventory)
 app.post('/api/sessions', async (req, res) => {
-  const { date, month, time, staffName, vendorStamps, items } = req.body;
+  const { date, month, time, staffName, location, vendorStamps, items } = req.body;
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
 
     const { rows: [session] } = await client.query(
-      'INSERT INTO sessions (date, month, time, staff_name) VALUES ($1,$2,$3,$4) RETURNING *',
-      [date, month, time, staffName]
+      'INSERT INTO sessions (date, month, time, staff_name, location) VALUES ($1,$2,$3,$4,$5) RETURNING *',
+      [date, month, time, staffName, location || 'Piikoi']
     );
 
     // Insert session items
@@ -274,12 +281,18 @@ app.post('/api/sessions', async (req, res) => {
   }
 });
 
-// GET sessions list
+// GET sessions list (optional ?location= filter)
 app.get('/api/sessions', async (req, res) => {
   try {
-    const { rows } = await pool.query(
-      'SELECT * FROM sessions ORDER BY created_at DESC LIMIT 100'
-    );
+    const { location } = req.query;
+    let query = 'SELECT * FROM sessions';
+    const params = [];
+    if (location) {
+      query += ' WHERE location=$1';
+      params.push(location);
+    }
+    query += ' ORDER BY created_at DESC LIMIT 100';
+    const { rows } = await pool.query(query, params);
     res.json(rows);
   } catch (e) {
     res.status(500).json({ error: e.message });
