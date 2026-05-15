@@ -113,6 +113,7 @@ export default function App() {
       {location && tab === 'staff' && (
         <StaffTab
           lang={lang} t={t} items={items} location={location}
+          adminEmail={adminEmail}
           onComplete={() => {
             refreshSessions();
           }}
@@ -145,7 +146,7 @@ export default function App() {
 // ─────────────────────────────────────────────────────
 // STAFF TAB
 // ─────────────────────────────────────────────────────
-function StaffTab({ lang, t, items, location, onComplete, showToast }) {
+function StaffTab({ lang, t, items, location, adminEmail, onComplete, showToast }) {
   const [screen, setScreen]           = useState('top'); // 'top' | 'count' | 'done'
   const [staffName, setStaffName]     = useState('');
   const [selected, setSelected]       = useState([]);
@@ -277,9 +278,9 @@ function StaffTab({ lang, t, items, location, onComplete, showToast }) {
 管理者画面で詳細をご確認ください。`;
 
     function openNotifyGmail() {
-      const adminMail = ''; // will be filled from settings
+      const toMail = adminEmail || 'sales@tanto-otabe.com';
       navigator.clipboard.writeText(body).catch(()=>{});
-      const url = `https://mail.google.com/mail/?view=cm&fs=1&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+      const url = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(toMail)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
       window.open(url, '_blank');
     }
 
@@ -916,7 +917,7 @@ function SettingsTab({ lang, t, items, setItems, adminEmail, setAdminEmail, show
         <div style={{fontSize:14,fontWeight:500,marginBottom:8}}>{t('emailTitle')}</div>
         <div className="form-row">
           <label className="form-label">{t('emailLabel')}</label>
-          <input className="form-input" value={email} onChange={e=>setEmail(e.target.value)} placeholder="manager@tanto-hi.com" />
+          <input className="form-input" value={email} onChange={e=>setEmail(e.target.value)} placeholder="sales@tanto-otabe.com" />
         </div>
       </div>
     </div>
