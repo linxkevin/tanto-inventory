@@ -24,6 +24,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [toastMsg, showToast] = useToast();
   const [showManual, setShowManual] = useState(false);
+  const [adminUnlocked, setAdminUnlocked] = useState(false);
 
   const t = (k) => UI[lang][k] || UI.ja[k] || k;
 
@@ -87,11 +88,16 @@ export default function App() {
       {/* Tabs — only shown after location is chosen */}
       {location && (
         <div className="tab-bar">
-          {['staff','admin','history','settings'].map((tabKey,i) => (
-            <button key={tabKey} className={`tab${tab===tabKey?' active':''}`} onClick={()=>setTab(tabKey)}>
-              {t(['tabStaff','tabAdmin','tabHistory','tabSettings'][i])}
-            </button>
-          ))}
+          <button className={`tab${tab==='staff'?' active':''}`} onClick={()=>setTab('staff')}>
+            {t('tabStaff')}
+          </button>
+          <button className={`tab${['admin','history','settings'].includes(tab)?' active':''}`} onClick={()=>{
+            if(!adminUnlocked){ setTab('admin'); } else { setTab('admin'); }
+            setTab('admin');
+          }}>
+            {lang==='en'?'Admin':lang==='zh'?'管理员':'管理者'}
+            {!adminUnlocked && <i className="ti ti-lock" aria-hidden="true" style={{fontSize:11,marginLeft:5,opacity:0.6}} />}
+          </button>
         </div>
       )}
 
@@ -115,23 +121,18 @@ export default function App() {
           showToast={showToast}
         />
       )}
-      {location && tab === 'admin' && (
-        <AdminTab
-          lang={lang} t={t} items={items} sessions={sessions}
-          location={location}
-          adminEmail={adminEmail} setAdminEmail={setAdminEmail}
-          showToast={showToast}
-        />
-      )}
-      {location && tab === 'history' && (
-        <HistoryTab lang={lang} t={t} sessions={sessions} showToast={showToast} />
-      )}
-      {location && tab === 'settings' && (
-        <SettingsTab
-          lang={lang} t={t} items={items} setItems={setItems}
-          adminEmail={adminEmail} setAdminEmail={setAdminEmail}
-          showToast={showToast}
-        />
+      {location && ['admin','history','settings'].includes(tab) && (
+        adminUnlocked
+          ? <AdminArea
+              lang={lang} t={t} items={items} sessions={sessions}
+              location={location} activeTab={tab} setActiveTab={setTab}
+              adminEmail={adminEmail} setAdminEmail={setAdminEmail}
+              setItems={setItems} showToast={showToast}
+            />
+          : <AdminLock
+              lang={lang}
+              onUnlock={() => setAdminUnlocked(true)}
+            />
       )}
 
       {/* Manual Modal */}
@@ -742,55 +743,9 @@ function HistoryTab({ lang, t, sessions, showToast }) {
 // ─────────────────────────────────────────────────────
 // SETTINGS TAB
 // ─────────────────────────────────────────────────────
-const ADMIN_PASSWORD = 'tanto1109';
-
 function SettingsTab({ lang, t, items, setItems, adminEmail, setAdminEmail, showToast }) {
   const [email, setEmail] = useState(adminEmail);
   const [saving, setSaving] = useState(false);
-  const [unlocked, setUnlocked] = useState(false);
-  const [pwInput, setPwInput]   = useState('');
-  const [pwError, setPwError]   = useState(false);
-
-  function tryUnlock() {
-    if (pwInput === ADMIN_PASSWORD) {
-      setUnlocked(true);
-      setPwError(false);
-    } else {
-      setPwError(true);
-      setPwInput('');
-    }
-  }
-
-  // Password gate
-  if (!unlocked) return (
-    <div style={{maxWidth:360,margin:'4rem auto',textAlign:'center'}}>
-      <div style={{fontSize:40,marginBottom:'1rem'}}>🔒</div>
-      <div style={{fontSize:16,fontWeight:500,marginBottom:8}}>
-        {lang==='en' ? 'Admin Access Required' : lang==='zh' ? '需要管理员权限' : '管理者専用エリア'}
-      </div>
-      <div style={{fontSize:13,color:'var(--text-2)',marginBottom:'1.5rem'}}>
-        {lang==='en' ? 'Enter the admin password to continue.' : lang==='zh' ? '请输入管理员密码。' : 'パスワードを入力してください。'}
-      </div>
-      <input
-        className="form-input"
-        type="password"
-        placeholder={lang==='en' ? 'Password' : lang==='zh' ? '密码' : 'パスワード'}
-        value={pwInput}
-        onChange={e => { setPwInput(e.target.value); setPwError(false); }}
-        onKeyDown={e => e.key === 'Enter' && tryUnlock()}
-        style={{marginBottom:8,textAlign:'center',fontSize:16,letterSpacing:4}}
-        autoFocus
-      />
-      {pwError && (
-        <div style={{fontSize:12,color:'#A32D2D',marginBottom:8}}>
-          {lang==='en' ? 'Incorrect password.' : lang==='zh' ? '密码错误。' : 'パスワードが違います。'}
-        </div>
-      )}
-      <button className="btn-primary" style={{width:'100%'}} onClick={tryUnlock}>
-        {lang==='en' ? 'Unlock' : lang==='zh' ? '解锁' : 'ロック解除'}
-      </button>
-    </div>
-  );
 
   async function saveAll() {
     setSaving(true);
@@ -1083,6 +1038,110 @@ function LocationSelect({ lang, onSelect }) {
           </button>
         ))}
       </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────
+// ADMIN LOCK
+// ─────────────────────────────────────────────────────
+function AdminLock({ lang, onUnlock }) {
+  const [pw, setPw] = useState('');
+  const [err, setErr] = useState(false);
+
+  function tryUnlock() {
+    if (pw === 'tanto1109') { onUnlock(); setErr(false); }
+    else { setErr(true); setPw(''); }
+  }
+
+  return (
+    <div style={{maxWidth:360,margin:'4rem auto',textAlign:'center',padding:'0 1rem'}}>
+      <div style={{fontSize:40,marginBottom:'1rem'}}>🔒</div>
+      <div style={{fontSize:16,fontWeight:500,color:'var(--text)',marginBottom:6}}>
+        {lang==='en'?'Admin Access Required':lang==='zh'?'需要管理员权限':'管理者専用エリア'}
+      </div>
+      <div style={{fontSize:13,color:'var(--text-2)',marginBottom:'1.5rem'}}>
+        {lang==='en'?'Enter the admin password to continue.':lang==='zh'?'请输入管理员密码。':'パスワードを入力してください。'}
+      </div>
+      <input
+        className="form-input"
+        type="password"
+        placeholder={lang==='en'?'Password':lang==='zh'?'密码':'パスワード'}
+        value={pw}
+        onChange={e=>{setPw(e.target.value);setErr(false);}}
+        onKeyDown={e=>e.key==='Enter'&&tryUnlock()}
+        style={{marginBottom:8,textAlign:'center',fontSize:16,letterSpacing:4}}
+        autoFocus
+      />
+      {err && <div style={{fontSize:12,color:'#A32D2D',marginBottom:8}}>
+        {lang==='en'?'Incorrect password.':lang==='zh'?'密码错误。':'パスワードが違います。'}
+      </div>}
+      <button className="btn-primary" style={{width:'100%'}} onClick={tryUnlock}>
+        {lang==='en'?'Unlock':lang==='zh'?'解锁':'ロック解除'}
+      </button>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────
+// ADMIN AREA (sub-tabs: 発注 / 履歴 / 設定)
+// ─────────────────────────────────────────────────────
+function AdminArea({ lang, t, items, sessions, location, activeTab, setActiveTab, adminEmail, setAdminEmail, setItems, showToast }) {
+  const subTabs = [
+    { key:'admin',    labelJa:'発注',  labelEn:'Orders',   labelZh:'订货' },
+    { key:'history',  labelJa:'履歴',  labelEn:'History',  labelZh:'历史' },
+    { key:'settings', labelJa:'設定',  labelEn:'Settings', labelZh:'设置' },
+  ];
+
+  function label(tab) {
+    if(lang==='en') return tab.labelEn;
+    if(lang==='zh') return tab.labelZh;
+    return tab.labelJa;
+  }
+
+  const currentTab = subTabs.find(s=>s.key===activeTab) ? activeTab : 'admin';
+
+  return (
+    <div>
+      {/* Sub-tab bar */}
+      <div style={{display:'flex',gap:4,marginBottom:'1.25rem',background:'var(--bg-2)',padding:4,borderRadius:'var(--radius-sm)'}}>
+        {subTabs.map(sub => (
+          <button
+            key={sub.key}
+            onClick={() => setActiveTab(sub.key)}
+            style={{
+              flex:1, padding:'7px 8px', textAlign:'center', fontSize:13,
+              border: currentTab===sub.key ? '0.5px solid var(--border)' : 'none',
+              background: currentTab===sub.key ? 'var(--bg)' : 'transparent',
+              color: currentTab===sub.key ? 'var(--text)' : 'var(--text-2)',
+              fontWeight: currentTab===sub.key ? 500 : 400,
+              borderRadius:'var(--radius-sm)', cursor:'pointer',
+            }}
+          >
+            {label(sub)}
+          </button>
+        ))}
+      </div>
+
+      {/* Sub-tab content */}
+      {currentTab === 'admin' && (
+        <AdminTab
+          lang={lang} t={t} items={items} sessions={sessions}
+          location={location}
+          adminEmail={adminEmail} setAdminEmail={setAdminEmail}
+          showToast={showToast}
+        />
+      )}
+      {currentTab === 'history' && (
+        <HistoryTab lang={lang} t={t} sessions={sessions} showToast={showToast} />
+      )}
+      {currentTab === 'settings' && (
+        <SettingsTab
+          lang={lang} t={t} items={items} setItems={setItems}
+          adminEmail={adminEmail} setAdminEmail={setAdminEmail}
+          showToast={showToast}
+        />
+      )}
     </div>
   );
 }
