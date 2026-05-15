@@ -155,13 +155,23 @@ function StaffTab({ lang, t, items, location, onComplete, showToast }) {
   const [savedVendors, setSavedVendors] = useState({});
   const [counts, setCounts]           = useState({}); // { itemId: value }
 
-  const allVendors = ALL_VENDORS;
+  const CATEGORIES = ['肉・海鮮','野菜・卵','麺・米','調味料','乾物・ストック','冷凍・その他','サーバー'];
+  const CAT_LABELS = {
+    ja: {'肉・海鮮':'肉・海鮮','野菜・卵':'野菜・卵','麺・米':'麺・米','調味料':'調味料','乾物・ストック':'乾物・ストック','冷凍・その他':'冷凍・その他','サーバー':'サーバー'},
+    en: {'肉・海鮮':'Meat & Seafood','野菜・卵':'Vegetables & Eggs','麺・米':'Noodles & Rice','調味料':'Seasonings','乾物・ストック':'Dry Goods','冷凍・その他':'Frozen & Other','サーバー':'Server (Bar)'},
+    zh: {'肉・海鮮':'肉类・海鲜','野菜・卵':'蔬菜・鸡蛋','麺・米':'面条・米饭','調味料':'调味料','乾物・ストック':'干货','冷凍・その他':'冷冻・其他','サーバー':'服务员（酒水）'},
+  };
+  const CAT_ICONS = {'肉・海鮮':'ti-meat','野菜・卵':'ti-leaf','麺・米':'ti-bowl','調味料':'ti-salt','乾物・ストック':'ti-package','冷凍・その他':'ti-snowflake','サーバー':'ti-glass-full'};
+  const CAT_COLORS = {'肉・海鮮':'#E24B4A','野菜・卵':'#1D9E75','麺・米':'#BA7517','調味料':'#378ADD','乾物・ストック':'#534AB7','冷凍・その他':'#888780','サーバー':'#534AB7'};
 
-  function toggleVendor(v) {
-    setSelected(s => s.includes(v) ? s.filter(x=>x!==v) : [...s, v]);
+  function catLabel(c) { return (CAT_LABELS[lang]||CAT_LABELS.ja)[c]||c; }
+  function getCatItems(c) { return items.filter(i => i.category === c); }
+
+  function toggleCat(c) {
+    setSelected(s => s.includes(c) ? s.filter(x=>x!==c) : [...s, c]);
   }
   function toggleAll() {
-    setSelected(s => s.length === allVendors.length ? [] : [...allVendors]);
+    setSelected(s => s.length === CATEGORIES.length ? [] : [...CATEGORIES]);
   }
 
   function startCounting() {
@@ -174,7 +184,7 @@ function StaffTab({ lang, t, items, location, onComplete, showToast }) {
   function backToTop() { setScreen('top'); }
 
   function getVendorItems(v) {
-    return items.filter(i => i.vendor === v);
+    return items.filter(i => i.category === v);
   }
 
   function vendorProgress(v) {
@@ -196,6 +206,7 @@ function StaffTab({ lang, t, items, location, onComplete, showToast }) {
     const now = new Date();
     const timeStr = now.toLocaleTimeString('ja-JP', { hour:'2-digit', minute:'2-digit' });
     setSavedVendors(sv => ({ ...sv, [activeVendor]: { staff: staffName, time: timeStr } }));
+    // activeVendor here is actually a category key
     showToast(t('toastVendorSaved'));
     // Auto-advance
     const next = selected.find(v => v !== activeVendor && !savedVendors[v] && v !== activeVendor);
@@ -213,14 +224,14 @@ function StaffTab({ lang, t, items, location, onComplete, showToast }) {
       finalStamps[activeVendor] = { staff: staffName, time: timeStr };
     }
 
-    // 選択したベンダーのアイテムのみ送信（未選択ベンダーは含めない）
+    // 選択したカテゴリーのアイテムのみ送信
     const sessionItems = items
-      .filter(item => selected.includes(item.vendor))
+      .filter(item => selected.includes(item.category))
       .map(item => ({
         id: item.id,
         current: counts[item.id] !== undefined && counts[item.id] !== '' ? parseInt(counts[item.id]) : null,
-        staffStamp: finalStamps[item.vendor]?.staff || staffName,
-        stampTime:  finalStamps[item.vendor]?.time  || timeStr,
+        staffStamp: finalStamps[item.category]?.staff || staffName,
+        stampTime:  finalStamps[item.category]?.time  || timeStr,
       }));
 
     try {
@@ -257,24 +268,25 @@ function StaffTab({ lang, t, items, location, onComplete, showToast }) {
       </div>
 
       <div className="vendor-grid">
-        {allVendors.map(v => {
-          const its = getVendorItems(v);
-          const isSel = selected.includes(v);
-          const isDone = !!savedVendors[v];
-          const isServer = v === SERVER_VENDOR;
+        {CATEGORIES.map(c => {
+          const its = getCatItems(c);
+          const isSel = selected.includes(c);
+          const isDone = !!savedVendors[c];
           return (
             <div
-              key={v}
+              key={c}
               className={`vendor-tile${isSel?' selected':''}${isDone?' done':''}`}
-              onClick={() => toggleVendor(v)}
+              onClick={() => toggleCat(c)}
             >
-              <div className="vt-dot" style={{background: vcolor(v,0)}} />
+              <div style={{width:36,height:36,borderRadius:9,background:isSel?CAT_COLORS[c]:'var(--bg-2)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,transition:'all 0.15s'}}>
+                <i className={`ti ${CAT_ICONS[c]}`} style={{fontSize:18,color:isSel?'white':CAT_COLORS[c]}} aria-hidden="true" />
+              </div>
               <div className="vt-info">
-                <div className="vt-name">{isServer ? t('serverLabel') : v}</div>
+                <div className="vt-name">{catLabel(c)}</div>
                 <div className="vt-count">{its.length}{t('itemsLabel')}</div>
               </div>
               {isDone
-                ? <span className="vt-done-badge">✓ {savedVendors[v].staff}</span>
+                ? <span className="vt-done-badge">✓ {savedVendors[c].staff}</span>
                 : isSel ? <span style={{fontSize:18,color:'var(--accent)'}}>✓</span> : null
               }
             </div>
@@ -304,26 +316,27 @@ function StaffTab({ lang, t, items, location, onComplete, showToast }) {
       {/* Counting header */}
       <div className="counting-header">
         <span className="staff-badge">{staffName}</span>
-        <span className="vendor-info">— {isServer ? t('serverLabel') : activeVendor} ({activeItems.length}{t('itemsLabel')})</span>
+        <span className="vendor-info">— {catLabel(activeVendor)} ({activeItems.length}{t('itemsLabel')})</span>
         <button className="btn-outline" style={{marginLeft:'auto',fontSize:12,padding:'5px 10px'}} onClick={backToTop}>
           ← {t('backBtn')}
         </button>
       </div>
 
-      {/* Vendor tabs */}
+      {/* Category tabs */}
       <div className="vendor-tabs">
-        {selected.map(v => {
-          const isDone = !!savedVendors[v];
-          const isActive = v === activeVendor;
+        {selected.map(c => {
+          const isDone = !!savedVendors[c];
+          const isActive = c === activeVendor;
           return (
             <button
-              key={v}
+              key={c}
               className={`vtab${isActive?' active':''}${isDone?' completed':''}`}
-              style={isActive ? {background:vcolor(v,0),color:'white',borderColor:vcolor(v,0)} : {}}
-              onClick={() => setActiveVendor(v)}
+              style={isActive ? {background:CAT_COLORS[c],color:'white',borderColor:CAT_COLORS[c]} : {}}
+              onClick={() => setActiveVendor(c)}
             >
               {isDone && <span className="vtab-dot" />}
-              {v === SERVER_VENDOR ? t('serverLabel') : v}
+              <i className={`ti ${CAT_ICONS[c]}`} style={{fontSize:12}} aria-hidden="true" />
+              {catLabel(c)}
             </button>
           );
         })}
@@ -345,7 +358,7 @@ function StaffTab({ lang, t, items, location, onComplete, showToast }) {
               <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start'}}>
                 <div>
                   <div className="item-name">{itemName(item, lang)}</div>
-                  <div className="item-unit">{t('scardUnit')}: {item.unit} | {t('scardMin')}: {item.min_stock}</div>
+                  <div className="item-unit">{item.vendor} | {t('scardUnit')}: {item.unit} | {t('scardMin')}: {item.min_stock}</div>
                 </div>
                 <div className={`item-status s-${sc}`} />
               </div>
@@ -760,8 +773,10 @@ function SettingsTab({ lang, t, items, setItems, adminEmail, setAdminEmail, show
     }
   }
 
+  const ALL_CATEGORIES = ['肉・海鮮','野菜・卵','麺・米','調味料','乾物・ストック','冷凍・その他','サーバー'];
+
   async function patchItem(item, field, value) {
-    const updated = { unit: item.unit, min_stock: item.min_stock, [field]: value };
+    const updated = { unit: item.unit, min_stock: item.min_stock, category: item.category, [field]: value };
     try {
       const result = await api.patchItem(item.id, updated);
       setItems(its => its.map(i => i.id === item.id ? { ...i, ...result } : i));
@@ -785,8 +800,19 @@ function SettingsTab({ lang, t, items, setItems, adminEmail, setAdminEmail, show
           return (
             <div key={item.id} className="scard" style={isServer?{borderColor:'#AFA9EC'}:{}}>
               <div className="scard-name">
-                {isServer && <span className="server-mini-badge">サーバー</span>}
+                <span style={{fontSize:10,background:'var(--bg-2)',color:'var(--text-2)',padding:'1px 6px',borderRadius:8,flexShrink:0}}>{item.category}</span>
                 {item.name_ja}
+              </div>
+              <div className="scard-row">
+                <span className="scard-label">{lang==='en'?'Category':lang==='zh'?'类别':'カテゴリー'}</span>
+                <select
+                  className="scard-input"
+                  defaultValue={item.category}
+                  onChange={e => patchItem(item, 'category', e.target.value)}
+                  style={{width:130,fontSize:11,textAlign:'right'}}
+                >
+                  {ALL_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
               </div>
               <div className="scard-row">
                 <span className="scard-label">{t('scardUnit')}</span>
