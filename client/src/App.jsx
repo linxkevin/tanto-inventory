@@ -148,12 +148,13 @@ export default function App() {
 // STAFF TAB
 // ─────────────────────────────────────────────────────
 function StaffTab({ lang, t, items, location, onComplete, showToast }) {
-  const [screen, setScreen]           = useState('top'); // 'top' | 'count'
+  const [screen, setScreen]           = useState('top'); // 'top' | 'count' | 'done'
   const [staffName, setStaffName]     = useState('');
   const [selected, setSelected]       = useState([]);
   const [activeVendor, setActiveVendor] = useState(null);
   const [savedVendors, setSavedVendors] = useState({});
   const [counts, setCounts]           = useState({}); // { itemId: value }
+  const [completedInfo, setCompletedInfo] = useState(null); // { staffName, categories, date, time, location }
 
   const CATEGORIES = ['肉・海鮮','野菜・卵','麺・米','調味料','乾物・ストック','冷凍・その他','サーバー'];
   const CAT_LABELS = {
@@ -239,9 +240,16 @@ function StaffTab({ lang, t, items, location, onComplete, showToast }) {
         date: dateKey, month: dateKey.slice(0,7), time: timeStr,
         staffName, location: location || 'Piikoi', vendorStamps: finalStamps, items: sessionItems,
       });
-      // Reset
-      setCounts({}); setSavedVendors({}); setSelected([]); setStaffName('');
-      setScreen('top');
+      // Save completed info for notification screen
+      setCompletedInfo({
+        staffName,
+        categories: selected,
+        date: dateKey,
+        time: timeStr,
+        location: location || 'Piikoi',
+      });
+      setCounts({}); setSavedVendors({}); setSelected([]);
+      setScreen('done');
       onComplete();
     } catch(e) {
       showToast(t('toastError'));
@@ -249,6 +257,79 @@ function StaffTab({ lang, t, items, location, onComplete, showToast }) {
   }
 
   const { filled, total } = totalProgress();
+
+  // ── DONE SCREEN ──
+  if (screen === 'done' && completedInfo) {
+    const catLabelsJa = {'肉・海鮮':'肉・海鮮','野菜・卵':'野菜・卵','麺・米':'麺・米','調味料':'調味料','乾物・ストック':'乾物・ストック','冷凍・その他':'冷凍・その他','サーバー':'サーバー'};
+    const catLabelsEn = {'肉・海鮮':'Meat & Seafood','野菜・卵':'Vegetables & Eggs','麺・米':'Noodles & Rice','調味料':'Seasonings','乾物・ストック':'Dry Goods','冷凍・その他':'Frozen & Other','サーバー':'Server (Bar)'};
+    const catLabelsZh = {'肉・海鮮':'肉类・海鲜','野菜・卵':'蔬菜・鸡蛋','麺・米':'面条・米饭','調味料':'调味料','乾物・ストック':'干货','冷凍・その他':'冷冻・其他','サーバー':'服务员（酒水）'};
+    const cl = lang==='en'?catLabelsEn:lang==='zh'?catLabelsZh:catLabelsJa;
+
+    const catListJa = completedInfo.categories.map(c=>catLabelsJa[c]||c).join('、');
+    const catListEn = completedInfo.categories.map(c=>catLabelsEn[c]||c).join(', ');
+    const subject = `【Tanto棚卸し通知】${completedInfo.location}店 ${completedInfo.date} ${completedInfo.time}`;
+    const body = `Tanto Gyoza and Ramen Bar — 棚卸し完了通知
+
+店舗: ${completedInfo.location}店
+日時: ${completedInfo.date} ${completedInfo.time}
+担当: ${completedInfo.staffName}
+カテゴリー: ${catListJa}
+
+以上、棚卸しが完了しました。
+管理者画面で詳細をご確認ください。`;
+
+    function openNotifyGmail() {
+      const adminMail = ''; // will be filled from settings
+      navigator.clipboard.writeText(body).catch(()=>{});
+      const url = `https://mail.google.com/mail/?view=cm&fs=1&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+      window.open(url, '_blank');
+    }
+
+    return (
+      <div style={{maxWidth:420,margin:'3rem auto',textAlign:'center',padding:'0 1rem'}}>
+        <div style={{fontSize:56,marginBottom:'0.75rem'}}>✅</div>
+        <div style={{fontSize:18,fontWeight:500,color:'var(--text)',marginBottom:6}}>
+          {lang==='en'?'Inventory Complete!':lang==='zh'?'盘点完成！':'棚卸し完了！'}
+        </div>
+        <div style={{fontSize:13,color:'var(--text-2)',marginBottom:'1.5rem'}}>
+          {completedInfo.location}店 — {completedInfo.staffName} — {completedInfo.time}
+        </div>
+
+        {/* Completed categories */}
+        <div style={{background:'var(--bg-2)',borderRadius:'var(--radius)',padding:'1rem',marginBottom:'1.5rem',textAlign:'left'}}>
+          <div style={{fontSize:12,fontWeight:500,color:'var(--text-2)',marginBottom:8}}>
+            {lang==='en'?'Completed Categories':lang==='zh'?'已完成类别':'完了カテゴリー'}
+          </div>
+          <div style={{display:'flex',flexWrap:'wrap',gap:6}}>
+            {completedInfo.categories.map(c=>(
+              <span key={c} style={{fontSize:12,fontWeight:500,background:'#E1F5EE',color:'#085041',padding:'3px 10px',borderRadius:10}}>
+                ✓ {cl[c]||c}
+              </span>
+            ))}
+          </div>
+        </div>
+
+        {/* Notify button */}
+        <button
+          onClick={openNotifyGmail}
+          style={{width:'100%',padding:'14px',background:'#D85A30',color:'white',border:'none',borderRadius:'var(--radius-sm)',fontSize:14,fontWeight:500,cursor:'pointer',marginBottom:10,display:'flex',alignItems:'center',justifyContent:'center',gap:8}}
+        >
+          <i className="ti ti-mail" aria-hidden="true" style={{fontSize:16}} />
+          {lang==='en'?'Notify Manager via Gmail':lang==='zh'?'通过 Gmail 通知管理员':'管理者へGmailで通知する'}
+        </button>
+        <div style={{fontSize:11,color:'var(--text-2)',marginBottom:'1.5rem'}}>
+          {lang==='en'?'Gmail opens with the notification pre-filled. Just enter the manager's email and send.':lang==='zh'?'Gmail 将自动填写通知内容，输入管理员邮箱后发送即可。':'Gmailが開きます。管理者のメールアドレスを入力して送信してください。'}
+        </div>
+
+        <button
+          onClick={()=>{ setStaffName(''); setScreen('top'); }}
+          style={{width:'100%',padding:'12px',background:'transparent',border:'0.5px solid var(--border)',borderRadius:'var(--radius-sm)',fontSize:13,color:'var(--text-2)',cursor:'pointer'}}
+        >
+          {lang==='en'?'Back to Home':lang==='zh'?'返回首页':'ホームに戻る'}
+        </button>
+      </div>
+    );
+  }
 
   // ── TOP SCREEN ──
   if (screen === 'top') return (
