@@ -82,14 +82,16 @@ export default function App() {
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="tab-bar">
-        {['staff','admin','history','settings'].map((tabKey,i) => (
-          <button key={tabKey} className={`tab${tab===tabKey?' active':''}`} onClick={()=>setTab(tabKey)}>
-            {t(['tabStaff','tabAdmin','tabHistory','tabSettings'][i])}
-          </button>
-        ))}
-      </div>
+      {/* Tabs — only shown after location is chosen */}
+      {location && (
+        <div className="tab-bar">
+          {['staff','admin','history','settings'].map((tabKey,i) => (
+            <button key={tabKey} className={`tab${tab===tabKey?' active':''}`} onClick={()=>setTab(tabKey)}>
+              {t(['tabStaff','tabAdmin','tabHistory','tabSettings'][i])}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Location selector — shown until a store is chosen */}
       {!location && (
