@@ -17,6 +17,7 @@ function useToast() {
 export default function App() {
   const [lang, setLang]       = useState('ja');
   const [tab, setTab]         = useState('staff');
+  const [location, setLocation] = useState(''); // '' = not yet selected
   const [items, setItems]     = useState([]);
   const [sessions, setSessions] = useState([]);
   const [adminEmail, setAdminEmail] = useState('');
@@ -38,7 +39,10 @@ export default function App() {
       .finally(() => setLoading(false));
   }, []); // eslint-disable-line
 
-  const refreshSessions = () => api.getSessions().then(setSessions).catch(console.error);
+  const refreshSessions = (loc) => {
+    const l = loc !== undefined ? loc : location;
+    api.getSessions(l).then(setSessions).catch(console.error);
+  };
 
   if (loading) return (
     <div className="app" style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100vh'}}>
@@ -50,7 +54,18 @@ export default function App() {
     <div className="app">
       {/* Header */}
       <div className="header">
-        <div className="logo"><span>Tanto</span> Gyoza &amp; Ramen Bar</div>
+        <div style={{display:'flex',alignItems:'center',gap:10}}>
+          <div className="logo"><span>Tanto</span> Gyoza &amp; Ramen Bar</div>
+          {location && (
+            <span
+              onClick={() => setLocation('')}
+              style={{fontSize:12,fontWeight:500,background:'#D85A30',color:'white',padding:'3px 10px',borderRadius:10,cursor:'pointer'}}
+              title={lang==='en'?'Change store':lang==='zh'?'切换店铺':'店舗を変更'}
+            >
+              {location} ×
+            </span>
+          )}
+        </div>
         <div style={{display:'flex',alignItems:'center',gap:10}}>
           <button
             onClick={()=>setShowManual(true)}
@@ -76,10 +91,18 @@ export default function App() {
         ))}
       </div>
 
-      {/* Views */}
-      {tab === 'staff' && (
+      {/* Location selector — shown until a store is chosen */}
+      {!location && (
+        <LocationSelect lang={lang} onSelect={(loc) => {
+          setLocation(loc);
+          refreshSessions(loc);
+        }} />
+      )}
+
+      {/* Views — only shown after location is chosen */}
+      {location && tab === 'staff' && (
         <StaffTab
-          lang={lang} t={t} items={items}
+          lang={lang} t={t} items={items} location={location}
           onComplete={(rec) => {
             showToast(t('toastSubmit'));
             refreshSessions();
@@ -88,17 +111,18 @@ export default function App() {
           showToast={showToast}
         />
       )}
-      {tab === 'admin' && (
+      {location && tab === 'admin' && (
         <AdminTab
           lang={lang} t={t} items={items} sessions={sessions}
+          location={location}
           adminEmail={adminEmail} setAdminEmail={setAdminEmail}
           showToast={showToast}
         />
       )}
-      {tab === 'history' && (
+      {location && tab === 'history' && (
         <HistoryTab lang={lang} t={t} sessions={sessions} showToast={showToast} />
       )}
-      {tab === 'settings' && (
+      {location && tab === 'settings' && (
         <SettingsTab
           lang={lang} t={t} items={items} setItems={setItems}
           adminEmail={adminEmail} setAdminEmail={setAdminEmail}
@@ -118,7 +142,7 @@ export default function App() {
 // ─────────────────────────────────────────────────────
 // STAFF TAB
 // ─────────────────────────────────────────────────────
-function StaffTab({ lang, t, items, onComplete, showToast }) {
+function StaffTab({ lang, t, items, location, onComplete, showToast }) {
   const [screen, setScreen]           = useState('top'); // 'top' | 'count'
   const [staffName, setStaffName]     = useState('');
   const [selected, setSelected]       = useState([]);
@@ -197,7 +221,7 @@ function StaffTab({ lang, t, items, onComplete, showToast }) {
     try {
       await api.postSession({
         date: dateKey, month: dateKey.slice(0,7), time: timeStr,
-        staffName, vendorStamps: finalStamps, items: sessionItems,
+        staffName, location: location || 'Piikoi', vendorStamps: finalStamps, items: sessionItems,
       });
       // Reset
       setCounts({}); setSavedVendors({}); setSelected([]); setStaffName('');
@@ -356,7 +380,7 @@ function StaffTab({ lang, t, items, onComplete, showToast }) {
 // ─────────────────────────────────────────────────────
 // ADMIN TAB
 // ─────────────────────────────────────────────────────
-function AdminTab({ lang, t, items, sessions, adminEmail, setAdminEmail, showToast }) {
+function AdminTab({ lang, t, items, sessions, location, adminEmail, setAdminEmail, showToast }) {
   const [latestSession, setLatestSession] = useState(null);
   const [showGmail, setShowGmail]         = useState(false);
   const [mailTo, setMailTo]               = useState(adminEmail);
@@ -378,7 +402,8 @@ function AdminTab({ lang, t, items, sessions, adminEmail, setAdminEmail, showToa
     const stamps = session.vendorStamps || {};
     let staffSummary = '';
     Object.keys(stamps).forEach(v => { staffSummary += `  ${v}: ${stamps[v].staff}（${stamps[v].time}）\n`; });
-    let txt = `Tanto Gyoza and Ramen Bar — 発注リスト\n日付: ${session.date} ${session.time}\n`;
+    const locName = session.location ? `【${session.location}店】` : '';
+    let txt = `Tanto Gyoza and Ramen Bar ${locName}— 発注リスト\n日付: ${session.date} ${session.time}\n`;
     if (staffSummary) txt += `\n【担当スタッフ】\n${staffSummary}`;
     txt += `\n${'─'.repeat(42)}\n\n`;
     const kitchen = oi.filter(i => i.vendor !== SERVER_VENDOR);
@@ -404,8 +429,8 @@ function AdminTab({ lang, t, items, sessions, adminEmail, setAdminEmail, showToa
 
   function openGmailModal() {
     if (!latestSession) { showToast(t('toastNoSession')); return; }
-    setMailSubject(`【Tanto発注】${latestSession.date} 棚卸し結果`);
-    setMailBody(buildOrderJa(latestSession));
+    const locTag = latestSession.location ? `【${latestSession.location}】` : '';
+    setMailSubject(`【Tanto発注】${locTag}${latestSession.date} 棚卸し結果`);
     setShowGmail(true);
   }
 
@@ -471,6 +496,10 @@ function AdminTab({ lang, t, items, sessions, adminEmail, setAdminEmail, showToa
     showToast(lang==='en' ? 'CSV downloaded.' : lang==='zh' ? 'CSV已下载。' : 'CSVをダウンロードしました。');
   }
 
+  const locationLabel = location
+    ? (lang==='en' ? location : lang==='zh' ? location+'店' : location+'店')
+    : '';
+
   // Summary
   let ok=0, low=0, ord=0;
   const sessionItems = latestSession?.items || [];
@@ -503,7 +532,10 @@ function AdminTab({ lang, t, items, sessions, adminEmail, setAdminEmail, showToa
       </div>
 
       <div className="section-header">
-        <div className="section-title">{t('adminTitle')}</div>
+        <div style={{display:'flex',alignItems:'center',gap:8}}>
+          <div className="section-title">{t('adminTitle')}</div>
+          {location && <span style={{fontSize:11,fontWeight:500,background:'#FAECE7',color:'#993C1D',padding:'2px 10px',borderRadius:10}}>{locationLabel}</span>}
+        </div>
         <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
           <button className="btn-outline" onClick={downloadCsv}><i className="ti ti-file-spreadsheet" /> {lang==='en'?'Export CSV':lang==='zh'?'导出CSV':'CSV出力'}</button>
           <button className="btn-outline" onClick={copyOrder}><i className="ti ti-copy" /> {t('copyBtn')}</button>
@@ -1001,6 +1033,51 @@ function ManualModal({ lang, onClose }) {
             lively-cat-production.up.railway.app →
           </a>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────
+// LOCATION SELECT
+// ─────────────────────────────────────────────────────
+const LOCATIONS = [
+  { key: 'Piikoi',     label: 'Piikoi店',     labelEn: 'Piikoi',     labelZh: 'Piikoi店' },
+  { key: 'University', label: 'University店',  labelEn: 'University', labelZh: 'University店' },
+];
+
+function LocationSelect({ lang, onSelect }) {
+  const title   = lang==='en' ? 'Select Store' : lang==='zh' ? '选择店铺' : '店舗を選択してください';
+  const sub     = lang==='en' ? 'Choose your location to begin.' : lang==='zh' ? '请选择您所在的店铺。' : 'どちらの店舗ですか？';
+
+  return (
+    <div style={{maxWidth:440,margin:'4rem auto',textAlign:'center',padding:'0 1rem'}}>
+      <div style={{fontSize:40,marginBottom:'1rem'}}>🏮</div>
+      <div style={{fontSize:18,fontWeight:500,color:'var(--text)',marginBottom:6}}>{title}</div>
+      <div style={{fontSize:13,color:'var(--text-2)',marginBottom:'2rem'}}>{sub}</div>
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
+        {LOCATIONS.map(loc => (
+          <button
+            key={loc.key}
+            onClick={() => onSelect(loc.key)}
+            style={{
+              background:'var(--bg)', border:'0.5px solid var(--border)',
+              borderRadius:'var(--radius)', padding:'2rem 1rem',
+              cursor:'pointer', transition:'all 0.15s',
+              display:'flex', flexDirection:'column', alignItems:'center', gap:8,
+            }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor='#D85A30'; e.currentTarget.style.background='#FAECE7'; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor='var(--border)'; e.currentTarget.style.background='var(--bg)'; }}
+          >
+            <div style={{width:48,height:48,borderRadius:12,background:'#D85A30',display:'flex',alignItems:'center',justifyContent:'center'}}>
+              <i className="ti ti-building-store" style={{fontSize:24,color:'white'}} aria-hidden="true" />
+            </div>
+            <div style={{fontSize:16,fontWeight:500,color:'var(--text)'}}>
+              {lang==='en' ? loc.labelEn : lang==='zh' ? loc.labelZh : loc.label}
+            </div>
+            <div style={{fontSize:11,color:'var(--text-2)'}}>Tanto Gyoza &amp; Ramen Bar</div>
+          </button>
+        ))}
       </div>
     </div>
   );

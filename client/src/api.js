@@ -13,7 +13,7 @@ async function req(method, path, body) {
 export const api = {
   getItems:           ()         => req('GET',   '/api/items'),
   patchItem:          (id, data) => req('PATCH',  `/api/items/${id}`, data),
-  getSessions:        ()         => req('GET',   '/api/sessions'),
+  getSessions:        (location) => req('GET',   '/api/sessions' + (location ? `?location=${encodeURIComponent(location)}` : '')),
   getSession:         (id)       => req('GET',   `/api/sessions/${id}`),
   postSession:        (data)     => req('POST',  '/api/sessions', data),
   getSettings:        ()         => req('GET',   '/api/settings'),
