@@ -59,10 +59,12 @@ export default function App() {
           {location && (
             <span
               onClick={() => setLocation('')}
-              style={{fontSize:12,fontWeight:500,background:'#D85A30',color:'white',padding:'3px 10px',borderRadius:10,cursor:'pointer'}}
+              style={{fontSize:12,fontWeight:500,background:'#D85A30',color:'white',padding:'5px 12px',borderRadius:10,cursor:'pointer',display:'flex',alignItems:'center',gap:6}}
               title={lang==='en'?'Change store':lang==='zh'?'切换店铺':'店舗を変更'}
             >
-              {location} ×
+              <i className="ti ti-building-store" aria-hidden="true" style={{fontSize:13}} />
+              {lang==='en'?location:lang==='zh'?location+'店':location+'店'}
+              <span style={{opacity:0.7,fontSize:11}}>× {lang==='en'?'change':lang==='zh'?'切换':'変更'}</span>
             </span>
           )}
         </div>
