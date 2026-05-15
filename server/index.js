@@ -73,6 +73,24 @@ async function initDB() {
       key TEXT PRIMARY KEY,
       value TEXT
     );
+
+    CREATE TABLE IF NOT EXISTS categories (
+      id SERIAL PRIMARY KEY,
+      name TEXT NOT NULL UNIQUE,
+      icon TEXT NOT NULL DEFAULT 'ti-tag',
+      sort_order INTEGER NOT NULL DEFAULT 0
+    );
+
+    -- Seed default categories if empty
+    INSERT INTO categories (name, icon, sort_order) VALUES
+      ('肉・海鮮', 'ti-meat', 1),
+      ('野菜・卵', 'ti-leaf', 2),
+      ('麺・米', 'ti-bowl', 3),
+      ('調味料', 'ti-salt', 4),
+      ('乾物・ストック', 'ti-package', 5),
+      ('冷凍・その他', 'ti-snowflake', 6),
+      ('サーバー', 'ti-glass-full', 7)
+    ON CONFLICT (name) DO NOTHING;
   `);
   console.log('✅ DB tables ready');
 }
@@ -329,6 +347,42 @@ app.get('/api/sessions/:id', async (req, res) => {
     stamps.forEach(s => { vendorStamps[s.vendor] = { staff: s.staff, time: s.stamp_time }; });
 
     res.json({ ...session, items, vendorStamps });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET categories
+app.get('/api/categories', async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT * FROM categories ORDER BY sort_order, id');
+    res.json(rows);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST category (add new)
+app.post('/api/categories', async (req, res) => {
+  const { name, icon } = req.body;
+  try {
+    const { rows: [maxRow] } = await pool.query('SELECT MAX(sort_order) as max FROM categories');
+    const nextOrder = (maxRow.max || 0) + 1;
+    const { rows } = await pool.query(
+      'INSERT INTO categories (name, icon, sort_order) VALUES ($1,$2,$3) ON CONFLICT (name) DO UPDATE SET icon=$2 RETURNING *',
+      [name, icon || 'ti-tag', nextOrder]
+    );
+    res.json(rows[0]);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// DELETE category
+app.delete('/api/categories/:name', async (req, res) => {
+  try {
+    await pool.query('DELETE FROM categories WHERE name=$1', [decodeURIComponent(req.params.name)]);
+    res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

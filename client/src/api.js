@@ -18,4 +18,7 @@ export const api = {
   postSession:        (data)     => req('POST',  '/api/sessions', data),
   getSettings:        ()         => req('GET',   '/api/settings'),
   postSetting:        (key, val) => req('POST',  '/api/settings', { key, value: val }),
+  getCategories:      ()         => req('GET',   '/api/categories'),
+  postCategory:       (name, icon) => req('POST', '/api/categories', { name, icon }),
+  deleteCategory:     (name)     => req('DELETE', `/api/categories/${encodeURIComponent(name)}`),
 };

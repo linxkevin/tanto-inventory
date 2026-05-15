@@ -32,15 +32,15 @@ export default function App() {
 
   // Load data on mount
   useEffect(() => {
-    Promise.all([api.getItems(), api.getSessions(), api.getSettings()])
-      .then(([its, sess, settings]) => {
+    Promise.all([api.getItems(), api.getSessions(), api.getSettings(), api.getCategories()])
+      .then(([its, sess, settings, cats]) => {
         setItems(its);
         setSessions(sess);
         setAdminEmail(settings.adminEmail || '');
-        // Merge categories from items with defaults
-        const defaults = ['肉・海鮮','野菜・卵','麺・米','調味料','乾物・ストック','冷凍・その他','サーバー'];
-        const fromItems = [...new Set(its.map(i => i.category).filter(Boolean))];
-        setCategories([...new Set([...defaults, ...fromItems])]);
+        // Load categories from DB
+        if (cats && cats.length) {
+          setCategories(cats.map(c => ({ name: c.name, icon: c.icon })));
+        }
       })
       .catch(() => showToast(t('toastError')))
       .finally(() => setLoading(false));
@@ -886,27 +886,37 @@ function SettingsTab({ lang, t, items, setItems, adminEmail, setAdminEmail, cate
     {icon:'ti-bottle', label:'ボトル'},
   ];
 
-  function addCategory() {
+  async function addCategory() {
     const name = newCatInput.trim();
     if (!name) return;
     if (categories.some(c => (typeof c==='string'?c:c.name) === name)) {
       showToast(lang==='en'?'Category already exists.':lang==='zh'?'类别已存在。':'そのカテゴリーは既に存在します。');
       return;
     }
-    setCategories(c => [...c, {name, icon: newCatIcon}]);
-    setNewCatInput('');
-    setNewCatIcon('ti-tag');
-    showToast(lang==='en'?'Category added.':lang==='zh'?'类别已添加。':'カテゴリーを追加しました。');
+    try {
+      await api.postCategory(name, newCatIcon);
+      setCategories(c => [...c, {name, icon: newCatIcon}]);
+      setNewCatInput('');
+      setNewCatIcon('ti-tag');
+      showToast(lang==='en'?'Category added.':lang==='zh'?'类别已添加。':'カテゴリーを追加しました。');
+    } catch(e) {
+      showToast(t('toastError'));
+    }
   }
 
   function getCatName(c) { return typeof c==='string' ? c : c.name; }
 
-  function deleteCategory(cat) {
+  async function deleteCategory(cat) {
     const catName = getCatName(cat);
     const inUse = items.some(i => i.category === catName);
     if (inUse) { showToast(lang==='en'?'Cannot delete: items are using this category.':lang==='zh'?'无法删除：该类别下有商品。':'このカテゴリーを使用中のアイテムがあるため削除できません。'); return; }
-    setCategories(c => c.filter(x => getCatName(x) !== catName));
-    showToast(lang==='en'?'Category deleted.':lang==='zh'?'类别已删除。':'カテゴリーを削除しました。');
+    try {
+      await api.deleteCategory(catName);
+      setCategories(c => c.filter(x => getCatName(x) !== catName));
+      showToast(lang==='en'?'Category deleted.':lang==='zh'?'类别已删除。':'カテゴリーを削除しました。');
+    } catch(e) {
+      showToast(t('toastError'));
+    }
   }
 
   const ALL_CATEGORIES = categories || [];
