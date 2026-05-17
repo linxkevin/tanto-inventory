@@ -11,8 +11,10 @@ async function req(method, path, body) {
 }
 
 export const api = {
-  getItems:           ()         => req('GET',   '/api/items'),
+  getItems:           (all)      => req('GET',   all ? '/api/items?all=true' : '/api/items'),
+  postItem:           (data)     => req('POST',  '/api/items', data),
   patchItem:          (id, data) => req('PATCH',  `/api/items/${id}`, data),
+  deleteItem:         (id)       => req('DELETE', `/api/items/${id}`),
   getSessions:        (location) => req('GET',   '/api/sessions' + (location ? `?location=${encodeURIComponent(location)}` : '')),
   getSession:         (id)       => req('GET',   `/api/sessions/${id}`),
   postSession:        (data)     => req('POST',  '/api/sessions', data),

@@ -34,10 +34,9 @@ export default function App() {
   useEffect(() => {
     Promise.all([api.getItems(), api.getSessions(), api.getSettings(), api.getCategories()])
       .then(([its, sess, settings, cats]) => {
-        setItems(its);
+        setItems(its); // active items only (for staff)
         setSessions(sess);
         setAdminEmail(settings.adminEmail || '');
-        // Load categories from DB
         if (cats && cats.length) {
           setCategories(cats.map(c => ({ name: c.name, icon: c.icon })));
         }
@@ -853,6 +852,69 @@ function SettingsTab({ lang, t, items, setItems, adminEmail, setAdminEmail, cate
   const [saving, setSaving] = useState(false);
   const [newCatInput, setNewCatInput] = useState('');
   const [newCatIcon, setNewCatIcon] = useState('ti-tag');
+  const [allItems, setAllItems] = useState([]);
+  const [showAddItem, setShowAddItem] = useState(false);
+  const [newItem, setNewItem] = useState({ name_ja:'', unit:'個', vendor:'', min_stock:2, category:'' });
+  const [settingsFilter, setSettingsFilter] = useState('all'); // 'all' | 'active' | 'inactive'
+
+  // Load ALL items (including inactive) for settings
+  useEffect(() => {
+    api.getItems(true).then(setAllItems).catch(console.error);
+  }, []);
+
+  function refreshAllItems() {
+    api.getItems(true).then(setAllItems).catch(console.error);
+    api.getItems().then(setItems).catch(console.error);
+  }
+
+  async function toggleActive(item) {
+    try {
+      const updated = await api.patchItem(item.id, {
+        unit: item.unit, min_stock: item.min_stock,
+        category: item.category, active: !item.active
+      });
+      setAllItems(its => its.map(i => i.id===item.id ? {...i, active: updated.active} : i));
+      setItems(its => !updated.active
+        ? its.filter(i => i.id !== item.id)
+        : [...its, updated].sort((a,b) => a.id-b.id)
+      );
+      showToast(updated.active
+        ? (lang==='en'?'Item enabled.':lang==='zh'?'商品已启用。':'アイテムを有効にしました。')
+        : (lang==='en'?'Item hidden.':lang==='zh'?'商品已隐藏。':'アイテムを非表示にしました。')
+      );
+    } catch(e) { showToast(t('toastError')); }
+  }
+
+  async function deleteItem(item) {
+    const confirmMsg = lang==='en'
+      ? `Delete "${item.name_ja}"? This cannot be undone.`
+      : lang==='zh' ? `确定删除"${item.name_ja}"？此操作无法撤销。`
+      : `「${item.name_ja}」を削除しますか？この操作は取り消せません。`;
+    if (!window.confirm(confirmMsg)) return;
+    try {
+      await api.deleteItem(item.id);
+      setAllItems(its => its.filter(i => i.id !== item.id));
+      setItems(its => its.filter(i => i.id !== item.id));
+      showToast(lang==='en'?'Item deleted.':lang==='zh'?'商品已删除。':'アイテムを削除しました。');
+    } catch(e) { showToast(t('toastError')); }
+  }
+
+  async function addNewItem() {
+    if (!newItem.name_ja.trim()) { showToast(lang==='en'?'Enter item name.':lang==='zh'?'请输入商品名称。':'アイテム名を入力してください。'); return; }
+    try {
+      const created = await api.postItem({
+        ...newItem,
+        name_en: newItem.name_ja,
+        name_zh: newItem.name_ja,
+        category: newItem.category || (categories[0]?getCatName(categories[0]):'調味料'),
+      });
+      setAllItems(its => [...its, created]);
+      setItems(its => [...its, created]);
+      setNewItem({ name_ja:'', unit:'個', vendor:'', min_stock:2, category:'' });
+      setShowAddItem(false);
+      showToast(lang==='en'?'Item added.':lang==='zh'?'商品已添加。':'アイテムを追加しました。');
+    } catch(e) { showToast(t('toastError')); }
+  }
 
   async function saveAll() {
     setSaving(true);
@@ -940,39 +1002,104 @@ function SettingsTab({ lang, t, items, setItems, adminEmail, setAdminEmail, cate
         </button>
       </div>
 
+      {/* Filter bar */}
+      <div style={{display:'flex',gap:6,marginBottom:12,flexWrap:'wrap'}}>
+        {[
+          {key:'all', labelJa:'全て', labelEn:'All', labelZh:'全部'},
+          {key:'active', labelJa:'有効', labelEn:'Active', labelZh:'启用'},
+          {key:'inactive', labelJa:'非表示', labelEn:'Hidden', labelZh:'隐藏'},
+        ].map(f=>(
+          <button key={f.key} onClick={()=>setSettingsFilter(f.key)}
+            style={{padding:'4px 12px',fontSize:12,borderRadius:20,border:'0.5px solid var(--border)',cursor:'pointer',
+              background:settingsFilter===f.key?'#D85A30':'var(--bg)',
+              color:settingsFilter===f.key?'white':'var(--text-2)',
+              borderColor:settingsFilter===f.key?'#D85A30':'var(--border)'}}>
+            {lang==='en'?f.labelEn:lang==='zh'?f.labelZh:f.labelJa}
+          </button>
+        ))}
+        <button onClick={()=>setShowAddItem(v=>!v)}
+          style={{marginLeft:'auto',padding:'4px 14px',fontSize:12,borderRadius:20,border:'0.5px solid #D85A30',cursor:'pointer',background:showAddItem?'#D85A30':'transparent',color:showAddItem?'white':'#D85A30'}}>
+          <i className="ti ti-plus" aria-hidden="true" /> {lang==='en'?'Add Item':lang==='zh'?'添加商品':'アイテム追加'}
+        </button>
+      </div>
+
+      {/* Add item form */}
+      {showAddItem && (
+        <div style={{background:'var(--bg-2)',borderRadius:'var(--radius)',padding:'1rem',marginBottom:12,border:'0.5px solid var(--border)'}}>
+          <div style={{fontSize:13,fontWeight:500,marginBottom:10}}>{lang==='en'?'New Item':lang==='zh'?'新商品':'新しいアイテム'}</div>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
+            <div className="form-row" style={{margin:0}}>
+              <label className="form-label">{lang==='en'?'Name (JP)':lang==='zh'?'名称（日文）':'アイテム名（日本語）'}</label>
+              <input className="form-input" value={newItem.name_ja} onChange={e=>setNewItem(v=>({...v,name_ja:e.target.value}))} />
+            </div>
+            <div className="form-row" style={{margin:0}}>
+              <label className="form-label">{lang==='en'?'Category':lang==='zh'?'类别':'カテゴリー'}</label>
+              <select className="form-input" value={newItem.category} onChange={e=>setNewItem(v=>({...v,category:e.target.value}))}>
+                {ALL_CATEGORIES.map(c=>{const n=typeof c==='string'?c:c.name;return <option key={n} value={n}>{n}</option>;})}
+              </select>
+            </div>
+            <div className="form-row" style={{margin:0}}>
+              <label className="form-label">{lang==='en'?'Unit':lang==='zh'?'单位':'単位'}</label>
+              <input className="form-input" value={newItem.unit} onChange={e=>setNewItem(v=>({...v,unit:e.target.value}))} />
+            </div>
+            <div className="form-row" style={{margin:0}}>
+              <label className="form-label">{lang==='en'?'Min Stock':lang==='zh'?'最低库存':'規定在庫'}</label>
+              <input className="form-input" type="number" value={newItem.min_stock} onChange={e=>setNewItem(v=>({...v,min_stock:parseInt(e.target.value)||0}))} />
+            </div>
+            <div className="form-row" style={{margin:0}}>
+              <label className="form-label">{lang==='en'?'Vendor':lang==='zh'?'供应商':'業者'}</label>
+              <input className="form-input" value={newItem.vendor} onChange={e=>setNewItem(v=>({...v,vendor:e.target.value}))} />
+            </div>
+          </div>
+          <div style={{display:'flex',gap:8,marginTop:10,justifyContent:'flex-end'}}>
+            <button className="btn-outline" onClick={()=>setShowAddItem(false)}>{lang==='en'?'Cancel':lang==='zh'?'取消':'キャンセル'}</button>
+            <button className="btn-primary" onClick={addNewItem}>{lang==='en'?'Add':lang==='zh'?'添加':'追加'}</button>
+          </div>
+        </div>
+      )}
+
+      {/* Item list */}
       <div className="settings-grid">
-        {items.map(item => {
-          const isServer = item.vendor === SERVER_VENDOR;
+        {(allItems.length ? allItems : items)
+          .filter(item => settingsFilter==='all' ? true : settingsFilter==='active' ? item.active!==false : item.active===false)
+          .map(item => {
+          const isHidden = item.active === false;
           return (
-            <div key={item.id} className="scard" style={isServer?{borderColor:'#AFA9EC'}:{}}>
-              <div className="scard-name">
-                <span style={{fontSize:10,background:'var(--bg-2)',color:'var(--text-2)',padding:'1px 6px',borderRadius:8,flexShrink:0}}>{item.category}</span>
-                {item.name_ja}
+            <div key={item.id} className="scard" style={{opacity:isHidden?0.55:1,borderColor:isHidden?'var(--border)':'var(--border)'}}>
+              <div className="scard-name" style={{justifyContent:'space-between'}}>
+                <div style={{display:'flex',alignItems:'center',gap:6,minWidth:0}}>
+                  <span style={{fontSize:10,background:'var(--bg-2)',color:'var(--text-2)',padding:'1px 6px',borderRadius:8,flexShrink:0}}>{item.category}</span>
+                  <span style={{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{item.name_ja}</span>
+                </div>
+                {isHidden && <span style={{fontSize:10,background:'#FAEEDA',color:'#633806',padding:'1px 6px',borderRadius:8,flexShrink:0}}>{lang==='en'?'Hidden':lang==='zh'?'隐藏':'非表示'}</span>}
               </div>
               <div className="scard-row">
                 <span className="scard-label">{lang==='en'?'Category':lang==='zh'?'类别':'カテゴリー'}</span>
-                <select
-                  className="scard-input"
-                  defaultValue={item.category}
-                  onChange={e => patchItem(item, 'category', e.target.value)}
-                  style={{width:130,fontSize:11,textAlign:'right'}}
-                >
-                  {ALL_CATEGORIES.map(c => { const n=typeof c==='string'?c:c.name; return <option key={n} value={n}>{n}</option>; })}
+                <select className="scard-input" defaultValue={item.category}
+                  onChange={e=>patchItem(item,'category',e.target.value)} style={{width:120,fontSize:11,textAlign:'right'}}>
+                  {ALL_CATEGORIES.map(c=>{const n=typeof c==='string'?c:c.name;return <option key={n} value={n}>{n}</option>;})}
                 </select>
               </div>
               <div className="scard-row">
                 <span className="scard-label">{t('scardUnit')}</span>
-                <input
-                  className="scard-input" defaultValue={item.unit}
-                  onBlur={e => patchItem(item, 'unit', e.target.value)}
-                />
+                <input className="scard-input" defaultValue={item.unit} onBlur={e=>patchItem(item,'unit',e.target.value)} />
               </div>
               <div className="scard-row">
                 <span className="scard-label">{t('scardMin')}</span>
-                <input
-                  className="scard-input" type="number" defaultValue={item.min_stock}
-                  onBlur={e => patchItem(item, 'min_stock', parseInt(e.target.value)||0)}
-                />
+                <input className="scard-input" type="number" defaultValue={item.min_stock}
+                  onBlur={e=>patchItem(item,'min_stock',parseInt(e.target.value)||0)} />
+              </div>
+              <div className="scard-row" style={{marginTop:8,paddingTop:8,borderTop:'0.5px solid var(--border)'}}>
+                <button onClick={()=>toggleActive(item)}
+                  style={{fontSize:11,padding:'3px 10px',borderRadius:10,border:'0.5px solid var(--border)',background:'transparent',cursor:'pointer',color:'var(--text-2)'}}>
+                  {isHidden
+                    ? (lang==='en'?'Enable':lang==='zh'?'启用':'有効にする')
+                    : (lang==='en'?'Hide':lang==='zh'?'隐藏':'非表示にする')}
+                </button>
+                <button onClick={()=>deleteItem(item)}
+                  style={{fontSize:11,padding:'3px 10px',borderRadius:10,border:'0.5px solid #FCEBEB',background:'#FCEBEB',cursor:'pointer',color:'#A32D2D'}}>
+                  {lang==='en'?'Delete':lang==='zh'?'删除':'削除'}
+                </button>
               </div>
             </div>
           );

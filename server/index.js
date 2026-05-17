@@ -27,12 +27,17 @@ async function initDB() {
       unit TEXT NOT NULL,
       vendor TEXT NOT NULL,
       min_stock INTEGER NOT NULL DEFAULT 2,
-      category TEXT NOT NULL DEFAULT '調味料'
+      category TEXT NOT NULL DEFAULT '調味料',
+      active BOOLEAN NOT NULL DEFAULT true
     );
 
-    -- Add category column if it doesn't exist (for existing DBs)
+    -- Add columns if they don't exist (for existing DBs)
     DO $$ BEGIN
       ALTER TABLE items ADD COLUMN IF NOT EXISTS category TEXT NOT NULL DEFAULT '調味料';
+    EXCEPTION WHEN others THEN NULL;
+    END $$;
+    DO $$ BEGIN
+      ALTER TABLE items ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT true;
     EXCEPTION WHEN others THEN NULL;
     END $$;
 
@@ -286,25 +291,56 @@ async function seedItems() {
 // Health check
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
 
-// GET all items
+// GET all items (active only by default, ?all=true for all)
 app.get('/api/items', async (req, res) => {
   try {
-    const { rows } = await pool.query('SELECT * FROM items ORDER BY vendor, id');
+    const showAll = req.query.all === 'true';
+    const query = showAll
+      ? 'SELECT * FROM items ORDER BY category, id'
+      : 'SELECT * FROM items WHERE active=true ORDER BY category, id';
+    const { rows } = await pool.query(query);
     res.json(rows);
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
 
-// PATCH item settings (unit / min_stock / category)
+// PATCH item settings (unit / min_stock / category / active)
 app.patch('/api/items/:id', async (req, res) => {
-  const { unit, min_stock, category } = req.body;
+  const { unit, min_stock, category, active } = req.body;
   try {
     const { rows } = await pool.query(
-      'UPDATE items SET unit=$1, min_stock=$2, category=$3 WHERE id=$4 RETURNING *',
-      [unit, min_stock, category || '調味料', req.params.id]
+      'UPDATE items SET unit=$1, min_stock=$2, category=$3, active=$4 WHERE id=$5 RETURNING *',
+      [unit, min_stock, category || '調味料', active !== undefined ? active : true, req.params.id]
     );
     res.json(rows[0]);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST new item
+app.post('/api/items', async (req, res) => {
+  const { name_ja, name_en, name_zh, unit, vendor, min_stock, category } = req.body;
+  try {
+    const { rows: [maxRow] } = await pool.query('SELECT MAX(id) as max FROM items WHERE id < 200');
+    const nextId = Math.max((maxRow.max || 0) + 1, 114);
+    const { rows } = await pool.query(
+      `INSERT INTO items (id, name_ja, name_en, name_zh, unit, vendor, min_stock, category, active)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,true) RETURNING *`,
+      [nextId, name_ja, name_en || name_ja, name_zh || name_ja, unit, vendor || 'その他', min_stock || 2, category || '調味料']
+    );
+    res.json(rows[0]);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// DELETE item
+app.delete('/api/items/:id', async (req, res) => {
+  try {
+    await pool.query('DELETE FROM items WHERE id=$1', [req.params.id]);
+    res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
