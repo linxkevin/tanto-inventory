@@ -1280,16 +1280,16 @@ const MANUAL_STEPS = {
     },
     {
       num: '2', color: '#D85A30',
-      title: '担当ベンダーを選択する',
-      sub: 'Select Your Vendor',
-      body: '担当者名を入力後、リストから担当ベンダーを選択します。サーバーの方は「サーバー棚卸し」を選択。オレンジ色でハイライトされたら「棚卸しを開始する」をタップします。',
-      tip: '担当外のベンダーは選ばないでください。複数担当の場合は複数選択も可能です。',
+      title: '担当カテゴリーを選択する',
+      sub: 'Select Your Category',
+      body: '担当者名を入力後、リストから担当カテゴリーを選択します。サーバーの方は「サーバー」を選択。オレンジ色でハイライトされたら「棚卸しを開始する」をタップします。',
+      tip: '担当外のカテゴリーは選ばないでください。複数担当の場合は複数選択も可能です。',
     },
     {
       num: '3', color: '#D85A30',
       title: '在庫をカウントする',
       sub: 'Count Inventory',
-      body: '各アイテムの現在庫数を「＋」「－」ボタンまたは直接入力で記録します。途中で止める場合は「このベンダーを保存」で途中保存できます。',
+      body: '各アイテムの現在庫数を「＋」「－」ボタンまたは直接入力で記録します。途中で止める場合は「このカテゴリーを保存」で途中保存できます。',
       tip: '数が不確かな場合は 0 のままにし、確認してから入力してください。',
     },
     {
@@ -1310,10 +1310,10 @@ const MANUAL_STEPS = {
     },
     {
       num: '2', color: '#D85A30',
-      title: 'Select Your Vendor',
-      sub: '担当ベンダーを選択',
-      body: 'Enter your name, then tap your assigned vendor from the list. Servers should select "Server Inventory". Once highlighted in orange, tap "Start Counting".',
-      tip: 'Only select your assigned vendor(s). Do not select vendors you are not responsible for.',
+      title: 'Select Your Category',
+      sub: '担当カテゴリーを選択',
+      body: 'Enter your name, then tap your assigned category from the list. Servers should select "Server". Once highlighted in orange, tap "Start Counting".',
+      tip: 'Only select your assigned category. You can select multiple if you are responsible for more than one.',
     },
     {
       num: '3', color: '#D85A30',
@@ -1340,10 +1340,10 @@ const MANUAL_STEPS = {
     },
     {
       num: '2', color: '#D85A30',
-      title: '选择负责的供应商',
-      sub: 'Select Your Vendor',
-      body: '输入您的姓名后，从列表中选择您负责的供应商。服务员请选择「サーバー棚卸し」。选中后变为橙色高亮，点击「开始盘点」。',
-      tip: '请只选择您负责的供应商，不要选择其他供应商。',
+      title: '选择负责的类别',
+      sub: 'Select Your Category',
+      body: '输入您的姓名后，从列表中选择您负责的类别。服务员请选择「サーバー」。选中后变为橙色高亮，点击「开始盘点」。',
+      tip: '请只选择您负责的类别，不要选择其他类别。',
     },
     {
       num: '3', color: '#D85A30',
