@@ -1024,6 +1024,31 @@ function SettingsTab({ lang, t, items, setItems, adminEmail, setAdminEmail, cate
     showToast(lang==='en'?`Translated ${done} categories.`:lang==='zh'?`已翻译 ${done} 个类别。`:`${done}件のカテゴリーを翻訳しました。`);
   }
 
+  // Translate all items missing translations
+  async function translateAllItems() {
+    const missing = allItems.filter(i => !i.name_en || i.name_en === i.name_ja);
+    if (!missing.length) {
+      showToast(lang==='en'?'All items already translated.':lang==='zh'?'所有商品已翻译。':'全アイテムが翻訳済みです。');
+      return;
+    }
+    showToast(lang==='en'?`Translating ${missing.length} items...`:lang==='zh'?`正在翻译 ${missing.length} 个商品...`:`${missing.length}件のアイテムを翻訳中...`);
+    let done = 0;
+    for (const item of missing) {
+      try {
+        const { en, zh } = await translateJa(item.name_ja, 'item');
+        await api.patchItem(item.id, {
+          name_ja: item.name_ja, name_en: en, name_zh: zh,
+          unit: item.unit, min_stock: item.min_stock,
+          category: item.category, active: item.active !== false,
+        });
+        setAllItems(its => its.map(i => i.id===item.id ? {...i, name_en: en, name_zh: zh} : i));
+        setItems(its => its.map(i => i.id===item.id ? {...i, name_en: en, name_zh: zh} : i));
+        done++;
+      } catch(e) { console.warn('Translation failed for', item.name_ja); }
+    }
+    showToast(lang==='en'?`Translated ${done} items.`:lang==='zh'?`已翻译 ${done} 个商品。`:`${done}件のアイテムを翻訳しました。`);
+  }
+
   async function addCategory() {
     const name = newCatInput.trim();
     if (!name) return;
@@ -1138,10 +1163,17 @@ Japanese: ${name}`
             {lang==='en'?f.labelEn:lang==='zh'?f.labelZh:f.labelJa}
           </button>
         ))}
-        <button onClick={()=>setShowAddItem(v=>!v)}
-          style={{marginLeft:'auto',padding:'4px 14px',fontSize:12,borderRadius:20,border:'0.5px solid #D85A30',cursor:'pointer',background:showAddItem?'#D85A30':'transparent',color:showAddItem?'white':'#D85A30'}}>
-          <i className="ti ti-plus" aria-hidden="true" /> {lang==='en'?'Add Item':lang==='zh'?'添加商品':'アイテム追加'}
-        </button>
+        <div style={{marginLeft:'auto',display:'flex',gap:6}}>
+          <button onClick={translateAllItems}
+            style={{padding:'4px 12px',fontSize:12,borderRadius:20,border:'0.5px solid #378ADD',background:'#E6F1FB',color:'#042C53',cursor:'pointer',display:'flex',alignItems:'center',gap:4}}>
+            <i className="ti ti-language" aria-hidden="true" style={{fontSize:13}} />
+            {lang==='en'?'Translate all':lang==='zh'?'一键翻译':'一括翻訳'}
+          </button>
+          <button onClick={()=>setShowAddItem(v=>!v)}
+            style={{padding:'4px 14px',fontSize:12,borderRadius:20,border:'0.5px solid #D85A30',cursor:'pointer',background:showAddItem?'#D85A30':'transparent',color:showAddItem?'white':'#D85A30'}}>
+            <i className="ti ti-plus" aria-hidden="true" /> {lang==='en'?'Add Item':lang==='zh'?'添加商品':'アイテム追加'}
+          </button>
+        </div>
       </div>
 
       {/* Add item form */}
