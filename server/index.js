@@ -305,13 +305,16 @@ app.get('/api/items', async (req, res) => {
   }
 });
 
-// PATCH item settings (unit / min_stock / category / active)
+// PATCH item settings (name_ja / unit / min_stock / category / active)
 app.patch('/api/items/:id', async (req, res) => {
-  const { unit, min_stock, category, active } = req.body;
+  const { name_ja, unit, min_stock, category, active } = req.body;
   try {
     const { rows } = await pool.query(
-      'UPDATE items SET unit=$1, min_stock=$2, category=$3, active=$4 WHERE id=$5 RETURNING *',
-      [unit, min_stock, category || '調味料', active !== undefined ? active : true, req.params.id]
+      `UPDATE items SET
+        name_ja=COALESCE($1, name_ja),
+        unit=$2, min_stock=$3, category=$4, active=$5
+       WHERE id=$6 RETURNING *`,
+      [name_ja||null, unit, min_stock, category || '調味料', active !== undefined ? active : true, req.params.id]
     );
     res.json(rows[0]);
   } catch (e) {

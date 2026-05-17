@@ -856,6 +856,8 @@ function SettingsTab({ lang, t, items, setItems, adminEmail, setAdminEmail, cate
   const [showAddItem, setShowAddItem] = useState(false);
   const [newItem, setNewItem] = useState({ name_ja:'', unit:'個', vendor:'', min_stock:2, category:'' });
   const [settingsFilter, setSettingsFilter] = useState('all'); // 'all' | 'active' | 'inactive'
+  const [searchQuery, setSearchQuery] = useState('');
+  const [editingItem, setEditingItem] = useState(null); // item being edited
 
   // Load ALL items (including inactive) for settings
   useEffect(() => {
@@ -896,6 +898,23 @@ function SettingsTab({ lang, t, items, setItems, adminEmail, setAdminEmail, cate
       setAllItems(its => its.filter(i => i.id !== item.id));
       setItems(its => its.filter(i => i.id !== item.id));
       showToast(lang==='en'?'Item deleted.':lang==='zh'?'商品已删除。':'アイテムを削除しました。');
+    } catch(e) { showToast(t('toastError')); }
+  }
+
+  async function updateItem() {
+    if (!editingItem) return;
+    try {
+      const updated = await api.patchItem(editingItem.id, {
+        name_ja: editingItem.name_ja,
+        unit: editingItem.unit,
+        min_stock: editingItem.min_stock,
+        category: editingItem.category,
+        active: editingItem.active !== false,
+      });
+      setAllItems(its => its.map(i => i.id===editingItem.id ? {...i, ...updated} : i));
+      setItems(its => its.map(i => i.id===editingItem.id ? {...i, ...updated} : i));
+      setEditingItem(null);
+      showToast(lang==='en'?'Item updated.':lang==='zh'?'商品已更新。':'アイテムを更新しました。');
     } catch(e) { showToast(t('toastError')); }
   }
 
@@ -1002,6 +1021,21 @@ function SettingsTab({ lang, t, items, setItems, adminEmail, setAdminEmail, cate
         </button>
       </div>
 
+      {/* Search bar */}
+      <div style={{position:'relative',marginBottom:10}}>
+        <i className="ti ti-search" aria-hidden="true" style={{position:'absolute',left:10,top:'50%',transform:'translateY(-50%)',fontSize:14,color:'var(--text-2)'}} />
+        <input
+          className="form-input"
+          placeholder={lang==='en'?'Search items...':lang==='zh'?'搜索商品...':'アイテムを検索...'}
+          value={searchQuery}
+          onChange={e=>setSearchQuery(e.target.value)}
+          style={{paddingLeft:32}}
+        />
+        {searchQuery && (
+          <button onClick={()=>setSearchQuery('')} style={{position:'absolute',right:10,top:'50%',transform:'translateY(-50%)',background:'none',border:'none',cursor:'pointer',color:'var(--text-2)',fontSize:16}}>×</button>
+        )}
+      </div>
+
       {/* Filter bar */}
       <div style={{display:'flex',gap:6,marginBottom:12,flexWrap:'wrap'}}>
         {[
@@ -1062,6 +1096,7 @@ function SettingsTab({ lang, t, items, setItems, adminEmail, setAdminEmail, cate
       <div className="settings-grid">
         {(allItems.length ? allItems : items)
           .filter(item => settingsFilter==='all' ? true : settingsFilter==='active' ? item.active!==false : item.active===false)
+          .filter(item => !searchQuery || item.name_ja.toLowerCase().includes(searchQuery.toLowerCase()) || (item.category||'').toLowerCase().includes(searchQuery.toLowerCase()) || (item.vendor||'').toLowerCase().includes(searchQuery.toLowerCase()))
           .map(item => {
           const isHidden = item.active === false;
           return (
@@ -1090,11 +1125,15 @@ function SettingsTab({ lang, t, items, setItems, adminEmail, setAdminEmail, cate
                   onBlur={e=>patchItem(item,'min_stock',parseInt(e.target.value)||0)} />
               </div>
               <div className="scard-row" style={{marginTop:8,paddingTop:8,borderTop:'0.5px solid var(--border)'}}>
+                <button onClick={()=>setEditingItem({...item})}
+                  style={{fontSize:11,padding:'3px 10px',borderRadius:10,border:'0.5px solid var(--border)',background:'transparent',cursor:'pointer',color:'var(--text-2)'}}>
+                  <i className="ti ti-pencil" aria-hidden="true" style={{fontSize:11}} /> {lang==='en'?'Edit':lang==='zh'?'编辑':'編集'}
+                </button>
                 <button onClick={()=>toggleActive(item)}
                   style={{fontSize:11,padding:'3px 10px',borderRadius:10,border:'0.5px solid var(--border)',background:'transparent',cursor:'pointer',color:'var(--text-2)'}}>
                   {isHidden
-                    ? (lang==='en'?'Enable':lang==='zh'?'启用':'有効にする')
-                    : (lang==='en'?'Hide':lang==='zh'?'隐藏':'非表示にする')}
+                    ? (lang==='en'?'Enable':lang==='zh'?'启用':'有効')
+                    : (lang==='en'?'Hide':lang==='zh'?'隐藏':'非表示')}
                 </button>
                 <button onClick={()=>deleteItem(item)}
                   style={{fontSize:11,padding:'3px 10px',borderRadius:10,border:'0.5px solid #FCEBEB',background:'#FCEBEB',cursor:'pointer',color:'#A32D2D'}}>
@@ -1105,6 +1144,58 @@ function SettingsTab({ lang, t, items, setItems, adminEmail, setAdminEmail, cate
           );
         })}
       </div>
+
+      {/* Edit Modal */}
+      {editingItem && (
+        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.45)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:200,padding:'1rem'}}
+          onClick={e=>e.target===e.currentTarget&&setEditingItem(null)}>
+          <div style={{background:'var(--bg)',borderRadius:'var(--radius)',border:'0.5px solid var(--border)',padding:'1.5rem',width:'100%',maxWidth:420,position:'relative'}}>
+            <button onClick={()=>setEditingItem(null)}
+              style={{position:'absolute',top:12,right:14,background:'none',border:'none',fontSize:20,color:'var(--text-2)',cursor:'pointer'}}>×</button>
+            <div style={{fontSize:15,fontWeight:500,marginBottom:'1rem'}}>
+              <i className="ti ti-pencil" aria-hidden="true" style={{marginRight:6}} />
+              {lang==='en'?'Edit Item':lang==='zh'?'编辑商品':'アイテム編集'}
+            </div>
+            <div className="form-row">
+              <label className="form-label">{lang==='en'?'Name (JP)':lang==='zh'?'名称（日文）':'アイテム名（日本語）'}</label>
+              <input className="form-input" value={editingItem.name_ja}
+                onChange={e=>setEditingItem(v=>({...v,name_ja:e.target.value}))} />
+            </div>
+            <div className="form-row">
+              <label className="form-label">{lang==='en'?'Category':lang==='zh'?'类别':'カテゴリー'}</label>
+              <select className="form-input" value={editingItem.category}
+                onChange={e=>setEditingItem(v=>({...v,category:e.target.value}))}>
+                {ALL_CATEGORIES.map(c=>{const n=typeof c==='string'?c:c.name;return <option key={n} value={n}>{n}</option>;})}
+              </select>
+            </div>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
+              <div className="form-row" style={{margin:0}}>
+                <label className="form-label">{lang==='en'?'Unit':lang==='zh'?'单位':'単位'}</label>
+                <input className="form-input" value={editingItem.unit}
+                  onChange={e=>setEditingItem(v=>({...v,unit:e.target.value}))} />
+              </div>
+              <div className="form-row" style={{margin:0}}>
+                <label className="form-label">{lang==='en'?'Min Stock':lang==='zh'?'最低库存':'規定在庫'}</label>
+                <input className="form-input" type="number" value={editingItem.min_stock}
+                  onChange={e=>setEditingItem(v=>({...v,min_stock:parseInt(e.target.value)||0}))} />
+              </div>
+            </div>
+            <div className="form-row">
+              <label className="form-label">{lang==='en'?'Vendor':lang==='zh'?'供应商':'業者'}</label>
+              <input className="form-input" value={editingItem.vendor||''}
+                onChange={e=>setEditingItem(v=>({...v,vendor:e.target.value}))} />
+            </div>
+            <div style={{display:'flex',gap:8,justifyContent:'flex-end',marginTop:'1rem'}}>
+              <button className="btn-outline" onClick={()=>setEditingItem(null)}>
+                {lang==='en'?'Cancel':lang==='zh'?'取消':'キャンセル'}
+              </button>
+              <button className="btn-primary" onClick={updateItem}>
+                <i className="ti ti-device-floppy" aria-hidden="true" /> {lang==='en'?'Save':lang==='zh'?'保存':'保存'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Category Management */}
       <div style={{marginTop:'1.5rem',paddingTop:'1rem',borderTop:'0.5px solid var(--border)'}}>
