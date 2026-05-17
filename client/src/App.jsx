@@ -25,7 +25,7 @@ export default function App() {
   const [toastMsg, showToast] = useToast();
   const [showManual, setShowManual] = useState(false);
   const [adminUnlocked, setAdminUnlocked] = useState(false);
-  const DEFAULT_CATEGORIES = ['肉・海鮮','野菜・卵','麺・米','調味料','乾物・ストック','冷凍・その他','サーバー'];
+  const DEFAULT_CATEGORIES = ['肉・海鮮','野菜・卵','麺・米','調味料','乾物・ストック','冷凍・その他','サーバー','消耗品'];
   const [categories, setCategories] = useState(DEFAULT_CATEGORIES);
 
   const t = (k) => UI[lang][k] || UI.ja[k] || k;
@@ -165,12 +165,12 @@ function StaffTab({ lang, t, items, location, adminEmail, categories: catProp, o
   // Use categories from App state (managed in settings)
   const CATEGORIES = catProp || ['肉・海鮮','野菜・卵','麺・米','調味料','乾物・ストック','冷凍・その他','サーバー'];
   const CAT_LABELS = {
-    ja: {'肉・海鮮':'肉・海鮮','野菜・卵':'野菜・卵','麺・米':'麺・米','調味料':'調味料','乾物・ストック':'乾物・ストック','冷凍・その他':'冷凍・その他','サーバー':'サーバー'},
-    en: {'肉・海鮮':'Meat & Seafood','野菜・卵':'Vegetables & Eggs','麺・米':'Noodles & Rice','調味料':'Seasonings','乾物・ストック':'Dry Goods','冷凍・その他':'Frozen & Other','サーバー':'Server (Bar)'},
-    zh: {'肉・海鮮':'肉类・海鲜','野菜・卵':'蔬菜・鸡蛋','麺・米':'面条・米饭','調味料':'调味料','乾物・ストック':'干货','冷凍・その他':'冷冻・其他','サーバー':'服务员（酒水）'},
+    ja: {'肉・海鮮':'肉・海鮮','野菜・卵':'野菜・卵','麺・米':'麺・米','調味料':'調味料','乾物・ストック':'乾物・ストック','冷凍・その他':'冷凍・その他','サーバー':'サーバー','消耗品':'消耗品'},
+    en: {'肉・海鮮':'Meat & Seafood','野菜・卵':'Vegetables & Eggs','麺・米':'Noodles & Rice','調味料':'Seasonings','乾物・ストック':'Dry Goods','冷凍・その他':'Frozen & Other','サーバー':'Server (Bar)','消耗品':'Supplies'},
+    zh: {'肉・海鮮':'肉类・海鲜','野菜・卵':'蔬菜・鸡蛋','麺・米':'面条・米饭','調味料':'调味料','乾物・ストック':'干货','冷凍・その他':'冷冻・其他','サーバー':'服务员（酒水）','消耗品':'耗材'},
   };
-  const CAT_ICONS = {'肉・海鮮':'ti-meat','野菜・卵':'ti-leaf','麺・米':'ti-bowl','調味料':'ti-salt','乾物・ストック':'ti-package','冷凍・その他':'ti-snowflake','サーバー':'ti-glass-full'};
-  const CAT_COLORS = {'肉・海鮮':'#E24B4A','野菜・卵':'#1D9E75','麺・米':'#BA7517','調味料':'#378ADD','乾物・ストック':'#534AB7','冷凍・その他':'#888780','サーバー':'#534AB7'};
+  const CAT_ICONS = {'肉・海鮮':'ti-meat','野菜・卵':'ti-leaf','麺・米':'ti-bowl','調味料':'ti-salt','乾物・ストック':'ti-package','冷凍・その他':'ti-snowflake','サーバー':'ti-glass-full','消耗品':'ti-box'};
+  const CAT_COLORS = {'肉・海鮮':'#E24B4A','野菜・卵':'#1D9E75','麺・米':'#BA7517','調味料':'#378ADD','乾物・ストック':'#534AB7','冷凍・その他':'#888780','サーバー':'#993556','消耗品':'#4A7B6F'};
 
   function getCatName(c) { return typeof c==='string' ? c : c.name; }
   function getCatIcon(c) { return typeof c==='object' && c.icon ? c.icon : (CAT_ICONS[getCatName(c)] || 'ti-tag'); }
