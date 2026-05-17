@@ -469,13 +469,18 @@ async function seedCategories() {
     '消耗品': [300,301,302,303,304,305,306,307,308,309,310,311,312,313,314,315,316,317,318,319,320],
   };
 
+  // Only set category if still at default value '調味料'
+  // This preserves any manual changes made via the settings tab
   for (const [category, ids] of Object.entries(categoryMap)) {
     for (const id of ids) {
-      await pool.query('UPDATE items SET category=$1 WHERE id=$2', [category, id]);
+      await pool.query(
+        `UPDATE items SET category=$1 WHERE id=$2 AND category='調味料'`,
+        [category, id]
+      );
     }
   }
 
-  // Delete old items that no longer exist (id >= 200)
+  // Delete old server/consumable items that no longer exist
   const validIds = Object.values(categoryMap).flat();
   const validServerIds = validIds.filter(id=>id>=200);
   if (validServerIds.length > 0) {
@@ -484,7 +489,7 @@ async function seedCategories() {
     );
   }
 
-  console.log('✅ Categories seeded');
+  console.log('✅ Categories seeded (manual overrides preserved)');
 }
 
 // ── Start ─────────────────────────────────────────────
