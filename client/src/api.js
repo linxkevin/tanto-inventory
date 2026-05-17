@@ -22,5 +22,6 @@ export const api = {
   postSetting:        (key, val) => req('POST',  '/api/settings', { key, value: val }),
   getCategories:      ()         => req('GET',   '/api/categories'),
   postCategory:       (name, icon, name_en, name_zh) => req('POST', '/api/categories', { name, icon, name_en, name_zh }),
+  patchCategory:      (name, data) => req('PATCH', `/api/categories/${encodeURIComponent(name)}`, data),
   deleteCategory:     (name)     => req('DELETE', `/api/categories/${encodeURIComponent(name)}`),
 };

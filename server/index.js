@@ -317,16 +317,19 @@ app.get('/api/items', async (req, res) => {
   }
 });
 
-// PATCH item settings (name_ja / unit / min_stock / category / active)
+// PATCH item settings (name_ja / name_en / name_zh / unit / min_stock / category / active)
 app.patch('/api/items/:id', async (req, res) => {
-  const { name_ja, unit, min_stock, category, active } = req.body;
+  const { name_ja, name_en, name_zh, unit, min_stock, category, active } = req.body;
   try {
     const { rows } = await pool.query(
       `UPDATE items SET
         name_ja=COALESCE($1, name_ja),
-        unit=$2, min_stock=$3, category=$4, active=$5
-       WHERE id=$6 RETURNING *`,
-      [name_ja||null, unit, min_stock, category || '調味料', active !== undefined ? active : true, req.params.id]
+        name_en=COALESCE($2, name_en),
+        name_zh=COALESCE($3, name_zh),
+        unit=$4, min_stock=$5, category=$6, active=$7
+       WHERE id=$8 RETURNING *`,
+      [name_ja||null, name_en||null, name_zh||null, unit, min_stock, category || '調味料',
+       active !== undefined ? active : true, req.params.id]
     );
     res.json(rows[0]);
   } catch (e) {
@@ -468,6 +471,24 @@ app.post('/api/categories', async (req, res) => {
        ON CONFLICT (name) DO UPDATE SET name_en=$2, name_zh=$3, icon=$4
        RETURNING *`,
       [name, name_en || name, name_zh || name, icon || 'ti-tag', nextOrder]
+    );
+    res.json(rows[0]);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// PATCH category (update translations/icon)
+app.patch('/api/categories/:name', async (req, res) => {
+  const { name_en, name_zh, icon } = req.body;
+  try {
+    const { rows } = await pool.query(
+      `UPDATE categories SET
+        name_en=COALESCE($1, name_en),
+        name_zh=COALESCE($2, name_zh),
+        icon=COALESCE($3, icon)
+       WHERE name=$4 RETURNING *`,
+      [name_en||null, name_zh||null, icon||null, decodeURIComponent(req.params.name)]
     );
     res.json(rows[0]);
   } catch (e) {

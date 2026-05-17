@@ -912,9 +912,21 @@ function SettingsTab({ lang, t, items, setItems, adminEmail, setAdminEmail, cate
 
   async function updateItem() {
     if (!editingItem) return;
+    showToast(lang==='en'?'Saving...':lang==='zh'?'保存中...':'保存中...');
     try {
+      // Auto-translate if name changed
+      let name_en = editingItem.name_en, name_zh = editingItem.name_zh;
+      const originalItem = allItems.find(i => i.id===editingItem.id);
+      if (originalItem && originalItem.name_ja !== editingItem.name_ja) {
+        try {
+          const t2 = await translateJa(editingItem.name_ja, 'item');
+          name_en = t2.en; name_zh = t2.zh;
+        } catch(e) { console.warn('Translation failed'); }
+      }
       const updated = await api.patchItem(editingItem.id, {
         name_ja: editingItem.name_ja,
+        name_en,
+        name_zh,
         unit: editingItem.unit,
         min_stock: editingItem.min_stock,
         category: editingItem.category,
@@ -929,18 +941,26 @@ function SettingsTab({ lang, t, items, setItems, adminEmail, setAdminEmail, cate
 
   async function addNewItem() {
     if (!newItem.name_ja.trim()) { showToast(lang==='en'?'Enter item name.':lang==='zh'?'请输入商品名称。':'アイテム名を入力してください。'); return; }
+    showToast(lang==='en'?'Translating & adding...':lang==='zh'?'翻译并添加中...':'翻訳・追加中...');
     try {
+      // Auto-translate item name
+      let name_en = newItem.name_ja, name_zh = newItem.name_ja;
+      try {
+        const t2 = await translateJa(newItem.name_ja, 'item');
+        name_en = t2.en; name_zh = t2.zh;
+      } catch(e) { console.warn('Item translation failed'); }
+
       const created = await api.postItem({
         ...newItem,
-        name_en: newItem.name_ja,
-        name_zh: newItem.name_ja,
+        name_en,
+        name_zh,
         category: newItem.category || (categories[0]?getCatName(categories[0]):'調味料'),
       });
       setAllItems(its => [...its, created]);
       setItems(its => [...its, created]);
       setNewItem({ name_ja:'', unit:'個', vendor:'', min_stock:2, category:'' });
       setShowAddItem(false);
-      showToast(lang==='en'?'Item added.':lang==='zh'?'商品已添加。':'アイテムを追加しました。');
+      showToast(lang==='en'?`Added: ${name_en}`:lang==='zh'?`已添加: ${name_zh}`:`追加しました（EN: ${name_en}）`);
     } catch(e) { showToast(t('toastError')); }
   }
 
@@ -975,6 +995,56 @@ function SettingsTab({ lang, t, items, setItems, adminEmail, setAdminEmail, cate
     {icon:'ti-soup', label:'スープ'},
     {icon:'ti-bottle', label:'ボトル'},
   ];
+
+  // Shared translation helper
+  async function translateJa(text, type='general') {
+    const prompt = type === 'category'
+      ? `Translate this Japanese food/inventory category name into English and Simplified Chinese. Reply ONLY with JSON: {"en":"...","zh":"..."}
+
+Japanese: ${text}`
+      : `Translate this Japanese food/inventory item name into English and Simplified Chinese. Reply ONLY with JSON: {"en":"...","zh":"..."}
+
+Japanese: ${text}`;
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 100,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+    const data = await res.json();
+    const text2 = data.content?.[0]?.text || '';
+    const match = text2.match(/\{[^}]+\}/);
+    if (match) {
+      const parsed = JSON.parse(match[0]);
+      return { en: parsed.en || text, zh: parsed.zh || text };
+    }
+    return { en: text, zh: text };
+  }
+
+  // Translate all categories that are missing translations
+  async function translateAllCategories() {
+    const missing = categories.filter(c => {
+      const n = typeof c==='string'?c:c.name;
+      const en = typeof c==='object'?c.name_en:null;
+      return !en || en === n;
+    });
+    if (!missing.length) { showToast(lang==='en'?'All categories already translated.':lang==='zh'?'所有类别已翻译。':'全カテゴリーが翻訳済みです。'); return; }
+    showToast(lang==='en'?`Translating ${missing.length} categories...`:lang==='zh'?`正在翻译 ${missing.length} 个类别...`:`${missing.length}件のカテゴリーを翻訳中...`);
+    let done = 0;
+    for (const cat of missing) {
+      const name = typeof cat==='string'?cat:cat.name;
+      try {
+        const { en, zh } = await translateJa(name, 'category');
+        await api.patchCategory(name, { name_en: en, name_zh: zh });
+        setCategories(cs => cs.map(c => (typeof c==='string'?c:c.name)===name ? {...(typeof c==='object'?c:{name:c}), name_en: en, name_zh: zh} : c));
+        done++;
+      } catch(e) { console.warn('Translation failed for', name); }
+    }
+    showToast(lang==='en'?`Translated ${done} categories.`:lang==='zh'?`已翻译 ${done} 个类别。`:`${done}件のカテゴリーを翻訳しました。`);
+  }
 
   async function addCategory() {
     const name = newCatInput.trim();
@@ -1238,8 +1308,15 @@ Japanese: ${name}`
 
       {/* Category Management */}
       <div style={{marginTop:'1.5rem',paddingTop:'1rem',borderTop:'0.5px solid var(--border)'}}>
-        <div style={{fontSize:14,fontWeight:500,marginBottom:12}}>
-          {lang==='en'?'Category Management':lang==='zh'?'类别管理':'カテゴリー管理'}
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12}}>
+          <div style={{fontSize:14,fontWeight:500}}>
+            {lang==='en'?'Category Management':lang==='zh'?'类别管理':'カテゴリー管理'}
+          </div>
+          <button onClick={translateAllCategories}
+            style={{fontSize:12,padding:'4px 12px',borderRadius:10,border:'0.5px solid #378ADD',background:'#E6F1FB',color:'#042C53',cursor:'pointer',display:'flex',alignItems:'center',gap:4}}>
+            <i className="ti ti-language" aria-hidden="true" style={{fontSize:13}} />
+            {lang==='en'?'Auto-translate all':lang==='zh'?'一键翻译':'一括翻訳'}
+          </button>
         </div>
 
         {/* Existing categories */}
