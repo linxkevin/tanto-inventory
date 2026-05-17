@@ -38,7 +38,7 @@ export default function App() {
         setSessions(sess);
         setAdminEmail(settings.adminEmail || '');
         if (cats && cats.length) {
-          setCategories(cats.map(c => ({ name: c.name, icon: c.icon })));
+          setCategories(cats.map(c => ({ name: c.name, name_en: c.name_en, name_zh: c.name_zh, icon: c.icon })));
         }
       })
       .catch(() => showToast(t('toastError')))
@@ -174,7 +174,16 @@ function StaffTab({ lang, t, items, location, adminEmail, categories: catProp, o
   function getCatName(c) { return typeof c==='string' ? c : c.name; }
   function getCatIcon(c) { return typeof c==='object' && c.icon ? c.icon : (CAT_ICONS[getCatName(c)] || 'ti-tag'); }
   function getCatColor(c) { return CAT_COLORS[getCatName(c)] || '#888780'; }
-  function catLabel(c) { const n=getCatName(c); return (CAT_LABELS[lang]||CAT_LABELS.ja)[n]||n; }
+  function catLabel(c) {
+    const n = getCatName(c);
+    // Use translated names from DB if available
+    if (typeof c === 'object') {
+      if (lang === 'en' && c.name_en) return c.name_en;
+      if (lang === 'zh' && c.name_zh) return c.name_zh;
+    }
+    // Fall back to hardcoded translations
+    return (CAT_LABELS[lang]||CAT_LABELS.ja)[n] || n;
+  }
   function getCatItems(c) { return items.filter(i => i.category === getCatName(c)); }
 
   function toggleCat(c) {
@@ -974,12 +983,42 @@ function SettingsTab({ lang, t, items, setItems, adminEmail, setAdminEmail, cate
       showToast(lang==='en'?'Category already exists.':lang==='zh'?'类别已存在。':'そのカテゴリーは既に存在します。');
       return;
     }
+    showToast(lang==='en'?'Translating...':lang==='zh'?'翻译中...':'翻訳中...');
     try {
-      await api.postCategory(name, newCatIcon);
-      setCategories(c => [...c, {name, icon: newCatIcon}]);
+      // Auto-translate using Claude API
+      let name_en = name, name_zh = name;
+      try {
+        const res = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: 'claude-sonnet-4-20250514',
+            max_tokens: 100,
+            messages: [{
+              role: 'user',
+              content: `Translate this Japanese food/inventory category name into English and Simplified Chinese. Reply ONLY with JSON like: {"en":"...","zh":"..."}
+
+Japanese: ${name}`
+            }]
+          })
+        });
+        const data = await res.json();
+        const text = data.content?.[0]?.text || '';
+        const match = text.match(/\{[^}]+\}/);
+        if (match) {
+          const parsed = JSON.parse(match[0]);
+          name_en = parsed.en || name;
+          name_zh = parsed.zh || name;
+        }
+      } catch(translationErr) {
+        console.warn('Translation failed, using Japanese name:', translationErr);
+      }
+
+      const created = await api.postCategory(name, newCatIcon, name_en, name_zh);
+      setCategories(c => [...c, { name, name_en, name_zh, icon: newCatIcon }]);
       setNewCatInput('');
       setNewCatIcon('ti-tag');
-      showToast(lang==='en'?'Category added.':lang==='zh'?'类别已添加。':'カテゴリーを追加しました。');
+      showToast(lang==='en'?`Category added: ${name_en}`:lang==='zh'?`类别已添加: ${name_zh}`:`カテゴリーを追加しました（EN: ${name_en} / 中: ${name_zh}）`);
     } catch(e) {
       showToast(t('toastError'));
     }

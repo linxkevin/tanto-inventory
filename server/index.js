@@ -82,21 +82,33 @@ async function initDB() {
     CREATE TABLE IF NOT EXISTS categories (
       id SERIAL PRIMARY KEY,
       name TEXT NOT NULL UNIQUE,
+      name_en TEXT,
+      name_zh TEXT,
       icon TEXT NOT NULL DEFAULT 'ti-tag',
       sort_order INTEGER NOT NULL DEFAULT 0
     );
 
+    -- Add translation columns if missing
+    DO $$ BEGIN
+      ALTER TABLE categories ADD COLUMN IF NOT EXISTS name_en TEXT;
+      ALTER TABLE categories ADD COLUMN IF NOT EXISTS name_zh TEXT;
+    EXCEPTION WHEN others THEN NULL;
+    END $$;
+
     -- Seed default categories if empty
-    INSERT INTO categories (name, icon, sort_order) VALUES
-      ('肉・海鮮', 'ti-meat', 1),
-      ('野菜・卵', 'ti-leaf', 2),
-      ('麺・米', 'ti-bowl', 3),
-      ('調味料', 'ti-salt', 4),
-      ('乾物・ストック', 'ti-package', 5),
-      ('冷凍・その他', 'ti-snowflake', 6),
-      ('サーバー', 'ti-glass-full', 7),
-      ('消耗品', 'ti-box', 8)
-    ON CONFLICT (name) DO NOTHING;
+    INSERT INTO categories (name, name_en, name_zh, icon, sort_order) VALUES
+      ('肉・海鮮', 'Meat & Seafood', '肉类・海鲜', 'ti-meat', 1),
+      ('野菜・卵', 'Vegetables & Eggs', '蔬菜・鸡蛋', 'ti-leaf', 2),
+      ('麺・米', 'Noodles & Rice', '面条・米饭', 'ti-bowl', 3),
+      ('調味料', 'Seasonings', '调味料', 'ti-salt', 4),
+      ('乾物・ストック', 'Dry Goods', '干货', 'ti-package', 5),
+      ('冷凍・その他', 'Frozen & Other', '冷冻・其他', 'ti-snowflake', 6),
+      ('サーバー', 'Server (Bar)', '服务员（酒水）', 'ti-glass-full', 7),
+      ('消耗品', 'Supplies', '耗材', 'ti-box', 8)
+    ON CONFLICT (name) DO UPDATE SET
+      name_en=EXCLUDED.name_en,
+      name_zh=EXCLUDED.name_zh,
+      icon=EXCLUDED.icon;
   `);
   console.log('✅ DB tables ready');
 }
@@ -444,15 +456,18 @@ app.get('/api/categories', async (req, res) => {
   }
 });
 
-// POST category (add new)
+// POST category (add new) - accepts name_en, name_zh translations
 app.post('/api/categories', async (req, res) => {
-  const { name, icon } = req.body;
+  const { name, name_en, name_zh, icon } = req.body;
   try {
     const { rows: [maxRow] } = await pool.query('SELECT MAX(sort_order) as max FROM categories');
     const nextOrder = (maxRow.max || 0) + 1;
     const { rows } = await pool.query(
-      'INSERT INTO categories (name, icon, sort_order) VALUES ($1,$2,$3) ON CONFLICT (name) DO UPDATE SET icon=$2 RETURNING *',
-      [name, icon || 'ti-tag', nextOrder]
+      `INSERT INTO categories (name, name_en, name_zh, icon, sort_order)
+       VALUES ($1,$2,$3,$4,$5)
+       ON CONFLICT (name) DO UPDATE SET name_en=$2, name_zh=$3, icon=$4
+       RETURNING *`,
+      [name, name_en || name, name_zh || name, icon || 'ti-tag', nextOrder]
     );
     res.json(rows[0]);
   } catch (e) {
