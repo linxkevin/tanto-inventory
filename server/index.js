@@ -98,8 +98,7 @@ async function initDB() {
 
 // ── Seed items if empty ──────────────────────────────
 async function seedItems() {
-  const { rows } = await pool.query('SELECT COUNT(*) FROM items');
-  if (parseInt(rows[0].count) > 0) return;
+  // Always upsert all items to ensure DB is up to date
 
   const items = [
     // JFC
@@ -272,7 +271,10 @@ async function seedItems() {
   for (const item of items) {
     await pool.query(
       `INSERT INTO items (id, name_ja, name_en, name_zh, unit, vendor, min_stock)
-       VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT (id) DO NOTHING`,
+       VALUES ($1,$2,$3,$4,$5,$6,$7)
+       ON CONFLICT (id) DO UPDATE SET
+         name_ja=EXCLUDED.name_ja, name_en=EXCLUDED.name_en, name_zh=EXCLUDED.name_zh,
+         unit=EXCLUDED.unit, vendor=EXCLUDED.vendor, min_stock=EXCLUDED.min_stock`,
       item
     );
   }
@@ -473,11 +475,14 @@ async function seedCategories() {
     }
   }
 
-  // Delete old server items that no longer exist
+  // Delete old items that no longer exist (id >= 200)
   const validIds = Object.values(categoryMap).flat();
-  await pool.query(
-    `DELETE FROM items WHERE id >= 200 AND id NOT IN (${validIds.filter(id=>id>=200).join(',')})`
-  );
+  const validServerIds = validIds.filter(id=>id>=200);
+  if (validServerIds.length > 0) {
+    await pool.query(
+      `DELETE FROM items WHERE id >= 200 AND id NOT IN (${validServerIds.join(',')})`
+    );
+  }
 
   console.log('✅ Categories seeded');
 }
