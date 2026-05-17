@@ -303,6 +303,50 @@ async function seedItems() {
 // Health check
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
 
+// Translation endpoint (server-side to avoid CORS)
+app.post('/api/translate', async (req, res) => {
+  const { text, type } = req.body;
+  if (!text) return res.status(400).json({ error: 'text required' });
+
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return res.status(500).json({ error: 'ANTHROPIC_API_KEY not set' });
+
+  try {
+    const prompt = type === 'category'
+      ? `Translate this Japanese food/inventory category name into English and Simplified Chinese. Reply ONLY with JSON like: {"en":"...","zh":"..."}
+
+Japanese: ${text}`
+      : `Translate this Japanese food/inventory item name into English and Simplified Chinese. Reply ONLY with JSON like: {"en":"...","zh":"..."}
+
+Japanese: ${text}`;
+
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 100,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+    const data = await response.json();
+    const txt = data.content?.[0]?.text || '';
+    const match = txt.match(/\{[^}]+\}/);
+    if (match) {
+      const parsed = JSON.parse(match[0]);
+      return res.json({ en: parsed.en || text, zh: parsed.zh || text });
+    }
+    res.json({ en: text, zh: text });
+  } catch (e) {
+    console.error('Translation error:', e.message);
+    res.json({ en: text, zh: text });
+  }
+});
+
 // GET all items (active only by default, ?all=true for all)
 app.get('/api/items', async (req, res) => {
   try {

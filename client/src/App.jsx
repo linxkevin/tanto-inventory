@@ -996,32 +996,10 @@ function SettingsTab({ lang, t, items, setItems, adminEmail, setAdminEmail, cate
     {icon:'ti-bottle', label:'ボトル'},
   ];
 
-  // Shared translation helper
+  // Shared translation helper — calls server-side endpoint to avoid CORS
   async function translateJa(text, type='general') {
-    const prompt = type === 'category'
-      ? `Translate this Japanese food/inventory category name into English and Simplified Chinese. Reply ONLY with JSON: {"en":"...","zh":"..."}
-
-Japanese: ${text}`
-      : `Translate this Japanese food/inventory item name into English and Simplified Chinese. Reply ONLY with JSON: {"en":"...","zh":"..."}
-
-Japanese: ${text}`;
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 100,
-        messages: [{ role: 'user', content: prompt }]
-      })
-    });
-    const data = await res.json();
-    const text2 = data.content?.[0]?.text || '';
-    const match = text2.match(/\{[^}]+\}/);
-    if (match) {
-      const parsed = JSON.parse(match[0]);
-      return { en: parsed.en || text, zh: parsed.zh || text };
-    }
-    return { en: text, zh: text };
+    const result = await api.translate(text, type);
+    return { en: result.en || text, zh: result.zh || text };
   }
 
   // Translate all categories that are missing translations

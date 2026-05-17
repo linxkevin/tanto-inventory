@@ -23,5 +23,6 @@ export const api = {
   getCategories:      ()         => req('GET',   '/api/categories'),
   postCategory:       (name, icon, name_en, name_zh) => req('POST', '/api/categories', { name, icon, name_en, name_zh }),
   patchCategory:      (name, data) => req('PATCH', `/api/categories/${encodeURIComponent(name)}`, data),
+  translate:          (text, type) => req('POST',  '/api/translate', { text, type }),
   deleteCategory:     (name)     => req('DELETE', `/api/categories/${encodeURIComponent(name)}`),
 };
