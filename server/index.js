@@ -277,6 +277,20 @@ async function seedItems() {
     [412,'ミックスナッツ','Mixed Nuts','混合坚果','袋','Sam's',2],
     [413,'ピクルス','Pickles','泡菜','瓶','Sam's',2],
     [414,'パン粉','Breadcrumbs','面包粉','袋','Sam's',2],
+    // キッチン備品 (Sam's)
+    [415,'ZipLoc Sandwich','ZipLoc Sandwich','ZipLoc 三明治袋','箱','Sam's',2],
+    [416,'Ziploc Gallon','Ziploc Gallon','ZipLoc 加仑袋','箱','Sam's',2],
+    [417,'Paper Towel','Paper Towel','纸巾','袋','Sam's',4],
+    [418,'Plastic Food Wrap','Plastic Food Wrap','保鲜膜','本','Sam's',2],
+    [419,'Aluminum Wrap','Aluminum Wrap','铝箔纸','本','Sam's',2],
+    [420,'Rubber Gloves','Rubber Gloves','橡胶手套','箱','Sam's',2],
+    [421,'Wax Paper','Wax Paper','蜡纸','本','Sam's',2],
+    [422,'Red Pen','Red Pen','红笔','本','Sam's',3],
+    [423,'Label L','Label L (Large)','标签 L','袋','Sam's',2],
+    [424,'Label S','Label S (Small)','标签 S','袋','Sam's',2],
+    [425,'Blue Tape L','Blue Tape L (Large)','蓝色胶带 L','本','Sam's',2],
+    [426,'Blue Tape S','Blue Tape S (Small)','蓝色胶带 S','本','Sam's',2],
+    [427,'Rubber Band','Rubber Band','橡皮筋','袋','Sam's',2],
     // 消耗品
     [300,'ロールペーパー（Handy）','Roll Paper (Handy)','卫生纸（手持）','本','消耗品',2],
     [301,'ロールペーパー（Station/Kitchen）','Roll Paper (Station)','卫生纸（台站）','本','消耗品',2],
@@ -604,6 +618,7 @@ async function seedCategories() {
     '消耗品': [300,301,302,303,304,305,306,307,308,309,310,311,312,313,314,315,316,317,318,319,320],
     '調味料': [400,401,402,403,404,405,406,407,408,409,410,411],
     '乾物・ストック': [412,413,414],
+    'キッチン備品': [415,416,417,418,419,420,421,422,423,424,425,426,427],
   };
 
   // Only set category if still at default value '調味料'
