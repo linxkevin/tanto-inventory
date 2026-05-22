@@ -504,6 +504,7 @@ function AdminTab({ lang, t, items, sessions, location, adminEmail, setAdminEmai
   const [mailTo, setMailTo]               = useState(adminEmail);
   const [mailSubject, setMailSubject]     = useState('');
   const [mailBody, setMailBody]           = useState('');
+  const [sortMode, setSortMode]           = useState('vendor'); // 'vendor' | 'category'
 
   useEffect(() => {
     if (sessions.length) {
@@ -654,7 +655,24 @@ function AdminTab({ lang, t, items, sessions, location, adminEmail, setAdminEmai
           <div className="section-title">{t('adminTitle')}</div>
           {location && <span style={{fontSize:11,fontWeight:500,background:'#FAECE7',color:'#993C1D',padding:'2px 10px',borderRadius:10}}>{locationLabel}</span>}
         </div>
-        <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+        <div style={{display:'flex',gap:8,flexWrap:'wrap',alignItems:'center'}}>
+          {/* Sort toggle */}
+          <div style={{display:'flex',background:'var(--bg-2)',borderRadius:'var(--radius-sm)',border:'0.5px solid var(--border)',overflow:'hidden'}}>
+            <button onClick={()=>setSortMode('vendor')}
+              style={{padding:'6px 12px',fontSize:12,border:'none',cursor:'pointer',fontWeight:sortMode==='vendor'?500:400,
+                background:sortMode==='vendor'?'#D85A30':'transparent',
+                color:sortMode==='vendor'?'white':'var(--text-2)'}}>
+              <i className="ti ti-building-store" aria-hidden="true" style={{fontSize:12,marginRight:4}} />
+              {lang==='en'?'By Vendor':lang==='zh'?'按供应商':'業者別'}
+            </button>
+            <button onClick={()=>setSortMode('category')}
+              style={{padding:'6px 12px',fontSize:12,border:'none',cursor:'pointer',fontWeight:sortMode==='category'?500:400,
+                background:sortMode==='category'?'#D85A30':'transparent',
+                color:sortMode==='category'?'white':'var(--text-2)'}}>
+              <i className="ti ti-tag" aria-hidden="true" style={{fontSize:12,marginRight:4}} />
+              {lang==='en'?'By Category':lang==='zh'?'按类别':'カテゴリー別'}
+            </button>
+          </div>
           <button className="btn-outline" onClick={downloadCsv}><i className="ti ti-file-spreadsheet" /> {lang==='en'?'Export CSV':lang==='zh'?'导出CSV':'CSV出力'}</button>
           <button className="btn-outline" onClick={copyOrder}><i className="ti ti-copy" /> {t('copyBtn')}</button>
           <button className="btn-outline" onClick={openGmailModal}><i className="ti ti-mail" /> {t('gmailBtn')}</button>
@@ -668,21 +686,35 @@ function AdminTab({ lang, t, items, sessions, location, adminEmail, setAdminEmai
           <table>
             <thead>
               <tr>
-                <th style={{width:'28%'}}>{t('colItem')}</th>
-                <th style={{width:'18%'}}>{t('colVendor')}</th>
+                <th style={{width:'26%'}}>{t('colItem')}</th>
+                <th style={{width:'16%'}}>{sortMode==='category'?(lang==='en'?'Category':lang==='zh'?'类别':'カテゴリー'):t('colVendor')}</th>
                 <th style={{width:'10%'}}>{t('colCurrent')}</th>
                 <th style={{width:'10%'}}>{t('colMin')}</th>
                 <th style={{width:'11%'}}>{t('colOrder')}</th>
                 <th style={{width:'10%'}}>{t('colStatus')}</th>
-                <th style={{width:'13%'}}>{t('colStaff')}</th>
+                <th style={{width:'17%'}}>{t('colStaff')}</th>
               </tr>
             </thead>
             <tbody>
-              {[...kitchen, ...(server.length ? [{_divider:true}, ...server] : [])].map((item, idx) => {
+              {(() => {
+                // Build rows based on sortMode
+                if (sortMode === 'category') {
+                  const cats = [...new Set(sessionItems.map(i => i.category).filter(Boolean))].sort();
+                  const rows = [];
+                  cats.forEach(cat => {
+                    const catItems = sessionItems.filter(i => i.category === cat);
+                    rows.push({ _divider: true, label: cat, color: '#534AB7' });
+                    catItems.forEach(i => rows.push(i));
+                  });
+                  return rows;
+                } else {
+                  return [...kitchen, ...(server.length ? [{_divider:true, label:'サーバー棚卸し（アルコール・ドリンク）', color:'#3C3489'}, ...server] : [])];
+                }
+              })().map((item, idx) => {
                 if (item._divider) return (
-                  <tr key="div">
-                    <td colSpan={7} style={{padding:'6px 10px',background:'var(--bg-2)',fontSize:12,fontWeight:500,color:'#3C3489'}}>
-                      ▸ サーバー棚卸し（アルコール・ドリンク）
+                  <tr key={`div-${idx}`}>
+                    <td colSpan={7} style={{padding:'6px 10px',background:'var(--bg-2)',fontSize:12,fontWeight:500,color:item.color||'#3C3489'}}>
+                      ▸ {item.label}
                     </td>
                   </tr>
                 );
@@ -696,8 +728,11 @@ function AdminTab({ lang, t, items, sessions, location, adminEmail, setAdminEmai
                   <tr key={item.id || idx}>
                     <td title={name}>{name}</td>
                     <td>
-                      <span className="vendor-badge" style={{background:vcolor(item.vendor,1),color:vcolor(item.vendor,2)}}>
-                        {isSrv ? 'サーバー' : item.vendor}
+                      <span className="vendor-badge" style={{
+                        background: sortMode==='category' ? 'var(--bg-2)' : vcolor(item.vendor,1),
+                        color: sortMode==='category' ? 'var(--text-2)' : vcolor(item.vendor,2)
+                      }}>
+                        {sortMode==='category' ? (isSrv ? 'サーバー' : item.vendor) : (isSrv ? 'サーバー' : item.vendor)}
                       </span>
                     </td>
                     <td>{cur} <span className="unit-label">{item.unit}</span></td>
