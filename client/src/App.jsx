@@ -500,6 +500,7 @@ function StaffTab({ lang, t, items, location, adminEmail, categories: catProp, o
 // ─────────────────────────────────────────────────────
 function AdminTab({ lang, t, items, sessions, location, adminEmail, setAdminEmail, showToast }) {
   const [latestSession, setLatestSession] = useState(null);
+  const [selectedSessionId, setSelectedSessionId] = useState(null);
   const [showGmail, setShowGmail]         = useState(false);
   const [mailTo, setMailTo]               = useState(adminEmail);
   const [mailSubject, setMailSubject]     = useState('');
@@ -509,9 +510,10 @@ function AdminTab({ lang, t, items, sessions, location, adminEmail, setAdminEmai
 
   useEffect(() => {
     if (sessions.length) {
-      api.getSession(sessions[0].id).then(setLatestSession).catch(console.error);
+      const id = selectedSessionId || sessions[0].id;
+      api.getSession(id).then(setLatestSession).catch(console.error);
     }
-  }, [sessions]);
+  }, [sessions, selectedSessionId]);
 
   useEffect(() => { setMailTo(adminEmail); }, [adminEmail]);
 
@@ -636,6 +638,34 @@ function AdminTab({ lang, t, items, sessions, location, adminEmail, setAdminEmai
 
   return (
     <div>
+      {/* Session selector */}
+      <div style={{marginBottom:'1rem',background:'var(--bg-2)',borderRadius:'var(--radius)',padding:'10px 14px',border:'0.5px solid var(--border)',display:'flex',alignItems:'center',gap:10,flexWrap:'wrap'}}>
+        <div style={{fontSize:12,fontWeight:500,color:'var(--text-2)',whiteSpace:'nowrap'}}>
+          <i className="ti ti-calendar" aria-hidden="true" style={{marginRight:4}} />
+          {lang==='en'?'Select Session:':lang==='zh'?'选择盘点记录:':'棚卸しを選択:'}
+        </div>
+        <select
+          className="form-input"
+          style={{flex:1,minWidth:200,fontSize:13}}
+          value={selectedSessionId || (sessions[0]?.id || '')}
+          onChange={e => { setSelectedSessionId(Number(e.target.value)); setStatusFilter('all'); }}
+        >
+          {sessions.map(s => (
+            <option key={s.id} value={s.id}>
+              {s.date} {s.time}{s.staff_name ? ` — ${s.staff_name}` : ''}{s.location ? ` (${s.location})` : ''}
+            </option>
+          ))}
+        </select>
+        {selectedSessionId && selectedSessionId !== sessions[0]?.id && (
+          <button
+            onClick={() => { setSelectedSessionId(null); setStatusFilter('all'); }}
+            style={{fontSize:12,padding:'4px 10px',borderRadius:10,border:'0.5px solid var(--border)',background:'var(--bg)',cursor:'pointer',color:'var(--text-2)',whiteSpace:'nowrap'}}
+          >
+            {lang==='en'?'← Latest':lang==='zh'?'← 最新':'← 最新へ'}
+          </button>
+        )}
+      </div>
+
       {/* Summary cards — clickable filters */}
       <div className="summary-cards">
         {[
@@ -660,9 +690,15 @@ function AdminTab({ lang, t, items, sessions, location, adminEmail, setAdminEmai
       </div>
 
       <div className="section-header">
-        <div style={{display:'flex',alignItems:'center',gap:8}}>
+        <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
           <div className="section-title">{t('adminTitle')}</div>
           {location && <span style={{fontSize:11,fontWeight:500,background:'#FAECE7',color:'#993C1D',padding:'2px 10px',borderRadius:10}}>{locationLabel}</span>}
+          {latestSession && (
+            <span style={{fontSize:11,color:'var(--text-2)'}}>
+              {latestSession.date} {latestSession.time}
+              {latestSession.staff_name ? ` — ${latestSession.staff_name}` : ''}
+            </span>
+          )}
         </div>
         <div style={{display:'flex',gap:8,flexWrap:'wrap',alignItems:'center'}}>
           {/* Sort toggle */}
