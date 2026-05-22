@@ -505,6 +505,7 @@ function AdminTab({ lang, t, items, sessions, location, adminEmail, setAdminEmai
   const [mailSubject, setMailSubject]     = useState('');
   const [mailBody, setMailBody]           = useState('');
   const [sortMode, setSortMode]           = useState('vendor'); // 'vendor' | 'category'
+  const [statusFilter, setStatusFilter]   = useState('all'); // 'all' | 'ok' | 'low' | 'order'
 
   useEffect(() => {
     if (sessions.length) {
@@ -635,19 +636,27 @@ function AdminTab({ lang, t, items, sessions, location, adminEmail, setAdminEmai
 
   return (
     <div>
-      {/* Summary cards */}
+      {/* Summary cards — clickable filters */}
       <div className="summary-cards">
         {[
-          [t('sTotal'), sessionItems.length, ''],
-          [t('sOk'), ok, ''],
-          [t('sLow'), low, 'warn'],
-          [t('sOrder'), ord, 'danger'],
-        ].map(([label, val, cls]) => (
-          <div key={label} className="sum-card">
-            <div className="sum-label">{label}</div>
-            <div className={`sum-value${cls?' '+cls:''}`}>{val || '—'}</div>
-          </div>
-        ))}
+          [t('sTotal'), sessionItems.length, '', 'all'],
+          [t('sOk'), ok, '', 'ok'],
+          [t('sLow'), low, 'warn', 'low'],
+          [t('sOrder'), ord, 'danger', 'order'],
+        ].map(([label, val, cls, filterKey]) => {
+          const isActive = statusFilter === filterKey;
+          return (
+            <div key={label} className="sum-card" onClick={() => setStatusFilter(isActive ? 'all' : filterKey)}
+              style={{cursor:'pointer', border: isActive ? '2px solid #D85A30' : '2px solid transparent',
+                transition:'all 0.15s', borderRadius:'var(--radius-sm)'}}>
+              <div className="sum-label">{label}</div>
+              <div className={`sum-value${cls?' '+cls:''}`}>{val || '—'}</div>
+              {isActive && <div style={{fontSize:10,color:'#D85A30',marginTop:4,fontWeight:500}}>
+                {lang==='en'?'✓ Filtered':lang==='zh'?'✓ 已筛选':'✓ フィルター中'}
+              </div>}
+            </div>
+          );
+        })}
       </div>
 
       <div className="section-header">
@@ -697,18 +706,32 @@ function AdminTab({ lang, t, items, sessions, location, adminEmail, setAdminEmai
             </thead>
             <tbody>
               {(() => {
+                // Apply status filter
+                const filterFn = (item) => {
+                  if (statusFilter === 'all') return true;
+                  const cur = item.current_stock || 0;
+                  const needed = Math.max(0, item.min_stock - cur);
+                  if (statusFilter === 'order') return needed > 0;
+                  if (statusFilter === 'low')   return needed === 0 && cur < item.min_stock * 1.3;
+                  if (statusFilter === 'ok')    return needed === 0 && cur >= item.min_stock * 1.3;
+                  return true;
+                };
+
                 // Build rows based on sortMode
                 if (sortMode === 'category') {
                   const cats = [...new Set(sessionItems.map(i => i.category).filter(Boolean))].sort();
                   const rows = [];
                   cats.forEach(cat => {
-                    const catItems = sessionItems.filter(i => i.category === cat);
+                    const catItems = sessionItems.filter(i => i.category === cat).filter(filterFn);
+                    if (!catItems.length) return;
                     rows.push({ _divider: true, label: cat, color: '#534AB7' });
                     catItems.forEach(i => rows.push(i));
                   });
                   return rows;
                 } else {
-                  return [...kitchen, ...(server.length ? [{_divider:true, label:'サーバー棚卸し（アルコール・ドリンク）', color:'#3C3489'}, ...server] : [])];
+                  const filteredKitchen = kitchen.filter(filterFn);
+                  const filteredServer  = server.filter(filterFn);
+                  return [...filteredKitchen, ...(filteredServer.length ? [{_divider:true, label:'サーバー棚卸し（アルコール・ドリンク）', color:'#3C3489'}, ...filteredServer] : [])];
                 }
               })().map((item, idx) => {
                 if (item._divider) return (
