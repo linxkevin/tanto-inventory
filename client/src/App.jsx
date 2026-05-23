@@ -1213,8 +1213,10 @@ Japanese: ${name}`
     try {
       const result = await api.patchItem(item.id, updated);
       setItems(its => its.map(i => i.id === item.id ? { ...i, ...result } : i));
+      setAllItems(its => its.map(i => i.id === item.id ? { ...i, ...result } : i));
+      showToast(lang==='en'?'✓ Saved.':lang==='zh'?'✓ 已保存。':'✓ 保存しました。');
     } catch(e) {
-      showToast(t('toastError'));
+      showToast(lang==='en'?'Save failed. Please try again.':lang==='zh'?'保存失败，请重试。':'保存に失敗しました。もう一度試してください。');
     }
   }
 
@@ -1323,23 +1325,19 @@ Japanese: ${name}`
               </div>
               <div className="scard-row">
                 <span className="scard-label">{lang==='en'?'Category':lang==='zh'?'类别':'カテゴリー'}</span>
-                <select className="scard-input" defaultValue={item.category}
-                  onChange={e=>patchItem(item,'category',e.target.value)} style={{width:120,fontSize:11,textAlign:'right'}}>
-                  {ALL_CATEGORIES.map(c=>{const n=typeof c==='string'?c:c.name;return <option key={n} value={n}>{n}</option>;})}
-                </select>
+                <span style={{fontSize:11,color:'var(--text-2)'}}>{item.category}</span>
               </div>
               <div className="scard-row">
                 <span className="scard-label">{t('scardUnit')}</span>
-                <input className="scard-input" defaultValue={item.unit} onBlur={e=>patchItem(item,'unit',e.target.value)} />
+                <span style={{fontSize:11,color:'var(--text-2)'}}>{item.unit}</span>
               </div>
               <div className="scard-row">
                 <span className="scard-label">{t('scardMin')}</span>
-                <input className="scard-input" type="number" defaultValue={item.min_stock}
-                  onBlur={e=>patchItem(item,'min_stock',parseInt(e.target.value)||0)} />
+                <span style={{fontSize:11,color:'var(--text-2)'}}>{item.min_stock}</span>
               </div>
               <div className="scard-row" style={{marginTop:8,paddingTop:8,borderTop:'0.5px solid var(--border)'}}>
                 <button onClick={()=>setEditingItem({...item})}
-                  style={{fontSize:11,padding:'3px 10px',borderRadius:10,border:'0.5px solid var(--border)',background:'transparent',cursor:'pointer',color:'var(--text-2)'}}>
+                  style={{fontSize:12,padding:'4px 12px',borderRadius:10,border:'0.5px solid #D85A30',background:'#FAECE7',cursor:'pointer',color:'#D85A30',fontWeight:500}}>
                   <i className="ti ti-pencil" aria-hidden="true" style={{fontSize:11}} /> {lang==='en'?'Edit':lang==='zh'?'编辑':'編集'}
                 </button>
                 <button onClick={()=>toggleActive(item)}
