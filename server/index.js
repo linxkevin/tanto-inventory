@@ -319,9 +319,7 @@ async function seedItems() {
     await pool.query(
       `INSERT INTO items (id, name_ja, name_en, name_zh, unit, vendor, min_stock)
        VALUES ($1,$2,$3,$4,$5,$6,$7)
-       ON CONFLICT (id) DO UPDATE SET
-         name_ja=EXCLUDED.name_ja, name_en=EXCLUDED.name_en, name_zh=EXCLUDED.name_zh,
-         unit=EXCLUDED.unit, vendor=EXCLUDED.vendor, min_stock=EXCLUDED.min_stock`,
+       ON CONFLICT (id) DO NOTHING`,
       item
     );
   }
