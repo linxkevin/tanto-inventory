@@ -502,9 +502,9 @@ app.get('/api/sessions/:id', async (req, res) => {
     if (!session) return res.status(404).json({ error: 'Not found' });
 
     const { rows: items } = await pool.query(
-      `SELECT si.*, i.name_ja, i.name_en, i.name_zh, i.unit, i.vendor, i.min_stock
+      `SELECT si.*, i.name_ja, i.name_en, i.name_zh, i.unit, i.vendor, i.min_stock, i.category
        FROM session_items si JOIN items i ON si.item_id = i.id
-       WHERE si.session_id = $1 ORDER BY i.vendor, i.id`,
+       WHERE si.session_id = $1 ORDER BY i.category, i.id`,
       [req.params.id]
     );
 
