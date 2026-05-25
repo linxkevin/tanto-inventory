@@ -1896,7 +1896,7 @@ function ReceiptTab({ lang, t, showToast }) {
               },
               {
                 type: 'text',
-                text: `この納品伝票・請求書・配達票を読み取り、以下のJSON形式で返してください。JSONのみ返してください。マークダウンコードブロック不要です。
+                text: `この納品伝票・請求書・配達票・インボイスを詳細に読み取り、以下のJSON形式で返してください。JSONのみ返してください。マークダウンコードブロック不要です。会社名・ベンダー名・送り主名を必ず読み取ってください。
 
 {
   "vendor": "業者名（不明な場合は空文字）",
@@ -1982,7 +1982,9 @@ function ReceiptTab({ lang, t, showToast }) {
     if (rows.length === 0) return;
     setSaving(true);
     try {
-      const payload = rows.map(r => ({
+      const validRows = rows.filter(r => r.item_name.trim() !== '');
+      if (validRows.length === 0) { showToast('❌ 品名を入力してください'); setSaving(false); return; }
+      const payload = validRows.map(r => ({
         vendor: r.vendor,
         item_name: r.item_name,
         item_code: r.item_code,
