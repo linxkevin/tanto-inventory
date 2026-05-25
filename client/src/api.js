@@ -25,4 +25,8 @@ export const api = {
   patchCategory:      (name, data) => req('PATCH', `/api/categories/${encodeURIComponent(name)}`, data),
   translate:          (text, type) => req('POST',  '/api/translate', { text, type }),
   deleteCategory:     (name)     => req('DELETE', `/api/categories/${encodeURIComponent(name)}`),
+  getDeliveries:      (params)   => req('GET',   '/api/deliveries' + (params ? '?' + new URLSearchParams(params) : '')),
+  postDeliveries:     (items)    => req('POST',  '/api/deliveries', { items }),
+  patchDelivery:      (id, data) => req('PATCH', `/api/deliveries/${id}`, data),
+  deleteDelivery:     (id)       => req('DELETE', `/api/deliveries/${id}`),
 };

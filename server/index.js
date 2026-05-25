@@ -88,6 +88,19 @@ async function initDB() {
       sort_order INTEGER NOT NULL DEFAULT 0
     );
 
+
+    CREATE TABLE IF NOT EXISTS deliveries (
+      id            SERIAL PRIMARY KEY,
+      vendor        TEXT NOT NULL DEFAULT '',
+      item_name     TEXT NOT NULL DEFAULT '',
+      item_code     TEXT NOT NULL DEFAULT '',
+      unit_price    NUMERIC(10,2),
+      quantity      NUMERIC(10,3),
+      delivered_date DATE NOT NULL DEFAULT CURRENT_DATE,
+      note          TEXT DEFAULT '',
+      image_url     TEXT DEFAULT '',
+      created_at    TIMESTAMPTZ DEFAULT NOW()
+    );
     -- Add translation columns if missing
     DO $$ BEGIN
       ALTER TABLE categories ADD COLUMN IF NOT EXISTS name_en TEXT;
@@ -643,9 +656,65 @@ async function seedCategories() {
 }
 
 // ── Start ─────────────────────────────────────────────
+
+// ── Deliveries API ────────────────────────────────────
+app.get(`/api/deliveries`, async (req, res) => {
+  try {
+    const { vendor, from, to } = req.query;
+    let sql = `SELECT * FROM deliveries`;
+    const params = [];
+    const conds = [];
+    if (vendor) { params.push(vendor); conds.push(`vendor=$${params.length}`); }
+    if (from)   { params.push(from);   conds.push(`delivered_date>=$${params.length}`); }
+    if (to)     { params.push(to);     conds.push(`delivered_date<=$${params.length}`); }
+    if (conds.length) sql += ' WHERE ' + conds.join(' AND ');
+    sql += ' ORDER BY created_at DESC LIMIT 100';
+    const { rows } = await pool.query(sql, params);
+    res.json(rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post(`/api/deliveries`, async (req, res) => {
+  try {
+    const { items } = req.body;
+    if (!Array.isArray(items) || items.length === 0) return res.status(400).json({ error: 'items array required' });
+    const inserted = [];
+    for (const it of items) {
+      const { rows } = await pool.query(
+        `INSERT INTO deliveries (vendor,item_name,item_code,unit_price,quantity,delivered_date,note,image_url) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+        [it.vendor||'',it.item_name||'',it.item_code||'',it.unit_price??null,it.quantity??null,it.delivered_date||new Date().toISOString().slice(0,10),it.note||'',it.image_url||'']
+      );
+      inserted.push(rows[0]);
+    }
+    res.json(inserted);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.patch(`/api/deliveries/:id`, async (req, res) => {
+  try {
+    const { vendor,item_name,item_code,unit_price,quantity,delivered_date,note } = req.body;
+    const { rows } = await pool.query(
+      `UPDATE deliveries SET vendor=$1,item_name=$2,item_code=$3,unit_price=$4,quantity=$5,delivered_date=$6,note=$7 WHERE id=$8 RETURNING *`,
+      [vendor,item_name,item_code,unit_price,quantity,delivered_date,note,req.params.id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'not found' });
+    res.json(rows[0]);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete(`/api/deliveries/:id`, async (req, res) => {
+  try {
+    await pool.query('DELETE FROM deliveries WHERE id=$1', [req.params.id]);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 app.listen(PORT, async () => {
   console.log(`🚀 Server running on port ${PORT}`);
   await initDB();
   await seedItems();
   await seedCategories();
 });
+
+// ── Deliveries ────────────────────────────────────────
+// (inserted before listen — table created in initDB below)

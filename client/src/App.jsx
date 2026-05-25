@@ -96,6 +96,9 @@ export default function App() {
           <button className={`tab${tab==='staff'?' active':''}`} onClick={()=>setTab('staff')}>
             {t('tabStaff')}
           </button>
+          <button className={`tab${tab==='receipt'?' active':''}`} onClick={()=>setTab('receipt')}>
+            {lang==='en'?'📷 Delivery':lang==='zh'?'📷 入库':'📷 納品'}
+          </button>
           <button className={`tab${['admin','history','settings'].includes(tab)?' active':''}`} onClick={()=>{
             if(!adminUnlocked){ setTab('admin'); } else { setTab('admin'); }
             setTab('admin');
@@ -125,6 +128,10 @@ export default function App() {
           showToast={showToast}
         />
       )}
+      {location && tab === 'receipt' && (
+        <ReceiptTab lang={lang} showToast={showToast} />
+      )}
+
       {location && ['admin','history','settings'].includes(tab) && (
         adminUnlocked
           ? <AdminArea
@@ -1811,4 +1818,459 @@ function AdminArea({ lang, t, items, sessions, location, activeTab, setActiveTab
       )}
     </div>
   );
+}
+
+
+const VENDORS_JA = ['Amfac','DOT','Nalo','Sysco','UMI','WISMETTAC','その他'];
+const VENDORS_EN = ['Amfac','DOT','Nalo','Sysco','UMI','WISMETTAC','Other'];
+const VENDORS_ZH = ['Amfac','DOT','Nalo','Sysco','UMI','WISMETTAC','其他'];
+
+function ReceiptTab({ lang, t, showToast }) {
+  const [step, setStep]           = useState('capture'); // capture | review | saved
+  const [imageFile, setImageFile] = useState(null);
+  const [imageUrl, setImageUrl]   = useState('');
+  const [analyzing, setAnalyzing] = useState(false);
+  const [rows, setRows]           = useState([]);
+  const [saving, setSaving]       = useState(false);
+  const [history, setHistory]     = useState([]);
+  const [historyTab, setHistoryTab] = useState('input'); // input | history
+
+  const vendors = lang === 'en' ? VENDORS_EN : lang === 'zh' ? VENDORS_ZH : VENDORS_JA;
+
+  const L = {
+    title:       { ja:'📷 納品伝票リーダー', en:'📷 Delivery Receipt', zh:'📷 入库单扫描' },
+    capture:     { ja:'写真を撮る / 選ぶ',   en:'Take / Select Photo',  zh:'拍照 / 选择' },
+    analyze:     { ja:'AI解析する',           en:'Analyze with AI',      zh:'AI解析' },
+    analyzing:   { ja:'解析中...',            en:'Analyzing...',         zh:'解析中...' },
+    vendor:      { ja:'業者',                 en:'Vendor',               zh:'供应商' },
+    itemName:    { ja:'品名',                 en:'Item Name',            zh:'品名' },
+    itemCode:    { ja:'品番',                 en:'Item Code',            zh:'品号' },
+    unitPrice:   { ja:'単価',                 en:'Unit Price',           zh:'单价' },
+    quantity:    { ja:'数量',                 en:'Qty',                  zh:'数量' },
+    date:        { ja:'納品日',               en:'Date',                 zh:'日期' },
+    addRow:      { ja:'+ 行を追加',           en:'+ Add Row',            zh:'+ 追加行' },
+    save:        { ja:'台帳に保存',           en:'Save to Ledger',       zh:'保存台账' },
+    saving:      { ja:'保存中...',            en:'Saving...',            zh:'保存中...' },
+    saved:       { ja:'✅ 保存しました',       en:'✅ Saved',             zh:'✅ 已保存' },
+    retry:       { ja:'別の伝票を読む',       en:'Scan Another',         zh:'再次扫描' },
+    history:     { ja:'納品履歴',             en:'Delivery History',     zh:'入库历史' },
+    input:       { ja:'伝票入力',             en:'Enter Receipt',        zh:'录入单据' },
+    noHistory:   { ja:'履歴なし',             en:'No history',           zh:'暂无记录' },
+    total:       { ja:'合計',                 en:'Total',                zh:'合计' },
+    note:        { ja:'備考',                 en:'Note',                 zh:'备注' },
+    deleteRow:   { ja:'削除',                 en:'Del',                  zh:'删' },
+    aiHint:      { ja:'伝票の写真を選ぶとAIが自動で読み取ります', en:'Select a photo of the delivery slip — AI will read it automatically', zh:'选择送货单照片，AI将自动识别内容' },
+  };
+  const l = (k) => L[k]?.[lang] || L[k]?.ja || k;
+
+  // 画像選択
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setImageFile(file);
+    setImageUrl(URL.createObjectURL(file));
+    setStep('capture');
+    setRows([]);
+  };
+
+  // AI解析
+  const analyze = async () => {
+    if (!imageFile) return;
+    setAnalyzing(true);
+    try {
+      const base64 = await fileToBase64(imageFile);
+      const mediaType = imageFile.type || 'image/jpeg';
+
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 1000,
+          messages: [{
+            role: 'user',
+            content: [
+              {
+                type: 'image',
+                source: { type: 'base64', media_type: mediaType, data: base64 }
+              },
+              {
+                type: 'text',
+                text: `この納品伝票・請求書・配達票を読み取り、以下のJSON形式で返してください。JSONのみ返してください。マークダウンコードブロック不要です。
+
+{
+  "vendor": "業者名（不明な場合は空文字）",
+  "delivered_date": "YYYY-MM-DD形式（不明な場合は今日の日付）",
+  "items": [
+    {
+      "item_name": "品名",
+      "item_code": "品番（なければ空文字）",
+      "unit_price": 数値（不明はnull）,
+      "quantity": 数値（不明はnull）,
+      "note": "備考（なければ空文字）"
+    }
+  ]
+}
+
+今日の日付: ${new Date().toISOString().slice(0,10)}`
+              }
+            ]
+          }]
+        })
+      });
+
+      const data = await response.json();
+      const text = data.content?.find(c => c.type === 'text')?.text || '{}';
+      const clean = text.replace(/```json|```/g, '').trim();
+      const parsed = JSON.parse(clean);
+
+      const today = new Date().toISOString().slice(0,10);
+      const detectedVendor = parsed.vendor || '';
+      const detectedDate = parsed.delivered_date || today;
+
+      const newRows = (parsed.items || []).map((it, i) => ({
+        id: Date.now() + i,
+        vendor: detectedVendor,
+        item_name: it.item_name || '',
+        item_code: it.item_code || '',
+        unit_price: it.unit_price !== null && it.unit_price !== undefined ? String(it.unit_price) : '',
+        quantity: it.quantity !== null && it.quantity !== undefined ? String(it.quantity) : '',
+        delivered_date: detectedDate,
+        note: it.note || '',
+      }));
+
+      if (newRows.length === 0) {
+        newRows.push(emptyRow(detectedVendor, detectedDate));
+      }
+
+      setRows(newRows);
+      setStep('review');
+    } catch (err) {
+      console.error(err);
+      showToast('❌ 解析エラー。手動で入力してください。');
+      setRows([emptyRow('', new Date().toISOString().slice(0,10))]);
+      setStep('review');
+    } finally {
+      setAnalyzing(false);
+    }
+  };
+
+  const emptyRow = (vendor = '', date = new Date().toISOString().slice(0,10)) => ({
+    id: Date.now() + Math.random(),
+    vendor,
+    item_name: '',
+    item_code: '',
+    unit_price: '',
+    quantity: '',
+    delivered_date: date,
+    note: '',
+  });
+
+  const updateRow = (id, field, value) => {
+    setRows(prev => prev.map(r => r.id === id ? { ...r, [field]: value } : r));
+  };
+
+  const deleteRow = (id) => setRows(prev => prev.filter(r => r.id !== id));
+
+  const addRow = () => {
+    const last = rows[rows.length - 1];
+    setRows(prev => [...prev, emptyRow(last?.vendor || '', last?.delivered_date || '')]);
+  };
+
+  // 保存
+  const saveAll = async () => {
+    if (rows.length === 0) return;
+    setSaving(true);
+    try {
+      const payload = rows.map(r => ({
+        vendor: r.vendor,
+        item_name: r.item_name,
+        item_code: r.item_code,
+        unit_price: r.unit_price !== '' ? parseFloat(r.unit_price) : null,
+        quantity: r.quantity !== '' ? parseFloat(r.quantity) : null,
+        delivered_date: r.delivered_date,
+        note: r.note,
+        image_url: '',
+      }));
+      const BASE = process.env.REACT_APP_API_URL || 'http://localhost:3001';
+      const res = await fetch(`${BASE}/api/deliveries`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: payload }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      showToast(l('saved'));
+      setStep('saved');
+      loadHistory();
+    } catch (e) {
+      showToast('❌ 保存エラー: ' + e.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // 履歴取得
+  const loadHistory = async () => {
+    try {
+      const BASE = process.env.REACT_APP_API_URL || 'http://localhost:3001';
+      const res = await fetch(`${BASE}/api/deliveries`);
+      const data = await res.json();
+      setHistory(data);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  useEffect(() => { loadHistory(); }, []);
+
+  // 合計計算
+  const total = rows.reduce((sum, r) => {
+    const p = parseFloat(r.unit_price) || 0;
+    const q = parseFloat(r.quantity) || 0;
+    return sum + p * q;
+  }, 0);
+
+  const inputRef = React.useRef();
+
+  return (
+    <div style={{ padding: '0 0 80px' }}>
+      {/* サブタブ */}
+      <div style={{ display:'flex', gap:4, marginBottom:16, background:'var(--bg-2)', padding:4, borderRadius:10 }}>
+        {['input','history'].map(tt => (
+          <button key={tt}
+            onClick={() => setHistoryTab(tt)}
+            style={{
+              flex:1, padding:'8px 0', fontSize:13, border:'none', borderRadius:8, cursor:'pointer',
+              background: historyTab===tt ? 'var(--bg)' : 'transparent',
+              color: historyTab===tt ? 'var(--text-1)' : 'var(--text-2)',
+              fontWeight: historyTab===tt ? 600 : 400,
+              boxShadow: historyTab===tt ? '0 1px 4px rgba(0,0,0,0.08)' : 'none',
+            }}
+          >{l(tt)}</button>
+        ))}
+      </div>
+
+      {/* ── 入力タブ ── */}
+      {historyTab === 'input' && (
+        <>
+          {/* Step: capture */}
+          {(step === 'capture' || step === 'review') && (
+            <div style={{ marginBottom:16 }}>
+              {/* 画像プレビュー */}
+              <label style={{
+                display:'block', width:'100%', minHeight: imageUrl ? 'auto' : 140,
+                border:'2px dashed var(--border)', borderRadius:14,
+                background:'var(--bg-2)', cursor:'pointer',
+                overflow:'hidden', position:'relative',
+              }}>
+                {imageUrl ? (
+                  <img src={imageUrl} alt="伝票" style={{ width:'100%', maxHeight:220, objectFit:'contain', display:'block' }} />
+                ) : (
+                  <div style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', height:140, gap:8 }}>
+                    <span style={{ fontSize:36 }}>📷</span>
+                    <span style={{ fontSize:13, color:'var(--text-2)', textAlign:'center', padding:'0 20px' }}>{l('aiHint')}</span>
+                  </div>
+                )}
+                <input
+                  ref={inputRef}
+                  type="file" accept="image/*" capture="environment"
+                  onChange={handleFileChange}
+                  style={{ position:'absolute', inset:0, opacity:0, cursor:'pointer' }}
+                />
+              </label>
+
+              {imageUrl && step === 'capture' && (
+                <button
+                  onClick={analyze}
+                  disabled={analyzing}
+                  style={{
+                    width:'100%', marginTop:12, padding:'14px 0', borderRadius:12, border:'none',
+                    background: analyzing ? 'var(--bg-2)' : '#D85A30',
+                    color: analyzing ? 'var(--text-2)' : 'white',
+                    fontSize:15, fontWeight:600, cursor: analyzing ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  {analyzing ? l('analyzing') : l('analyze')}
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Step: review — 編集テーブル */}
+          {step === 'review' && rows.length > 0 && (
+            <div>
+              <div style={{ overflowX:'auto', WebkitOverflowScrolling:'touch' }}>
+                <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13, minWidth:600 }}>
+                  <thead>
+                    <tr style={{ background:'var(--bg-2)', color:'var(--text-2)' }}>
+                      {[l('date'), l('vendor'), l('itemName'), l('itemCode'), l('unitPrice'), l('quantity'), l('note'), ''].map((h,i) => (
+                        <th key={i} style={{ padding:'8px 6px', textAlign:'left', fontWeight:500, whiteSpace:'nowrap', borderBottom:'1px solid var(--border)' }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map(row => (
+                      <tr key={row.id} style={{ borderBottom:'1px solid var(--border)' }}>
+                        {/* 日付 */}
+                        <td style={{ padding:'6px 4px' }}>
+                          <input type="date" value={row.delivered_date}
+                            onChange={e => updateRow(row.id, 'delivered_date', e.target.value)}
+                            style={inputStyle} />
+                        </td>
+                        {/* 業者 */}
+                        <td style={{ padding:'6px 4px' }}>
+                          <select value={row.vendor} onChange={e => updateRow(row.id, 'vendor', e.target.value)} style={inputStyle}>
+                            <option value="">--</option>
+                            {vendors.map(v => <option key={v} value={v}>{v}</option>)}
+                          </select>
+                        </td>
+                        {/* 品名 */}
+                        <td style={{ padding:'6px 4px' }}>
+                          <input value={row.item_name} onChange={e => updateRow(row.id, 'item_name', e.target.value)} style={{...inputStyle, minWidth:100}} />
+                        </td>
+                        {/* 品番 */}
+                        <td style={{ padding:'6px 4px' }}>
+                          <input value={row.item_code} onChange={e => updateRow(row.id, 'item_code', e.target.value)} style={{...inputStyle, minWidth:70}} />
+                        </td>
+                        {/* 単価 */}
+                        <td style={{ padding:'6px 4px' }}>
+                          <input type="number" value={row.unit_price} onChange={e => updateRow(row.id, 'unit_price', e.target.value)} style={{...inputStyle, minWidth:70}} />
+                        </td>
+                        {/* 数量 */}
+                        <td style={{ padding:'6px 4px' }}>
+                          <input type="number" value={row.quantity} onChange={e => updateRow(row.id, 'quantity', e.target.value)} style={{...inputStyle, minWidth:60}} />
+                        </td>
+                        {/* 備考 */}
+                        <td style={{ padding:'6px 4px' }}>
+                          <input value={row.note} onChange={e => updateRow(row.id, 'note', e.target.value)} style={{...inputStyle, minWidth:80}} />
+                        </td>
+                        {/* 削除 */}
+                        <td style={{ padding:'6px 4px' }}>
+                          <button onClick={() => deleteRow(row.id)}
+                            style={{ padding:'4px 8px', fontSize:11, border:'1px solid var(--border)', borderRadius:6, background:'transparent', color:'#e55', cursor:'pointer' }}>
+                            {l('deleteRow')}
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* 合計 */}
+              {total > 0 && (
+                <div style={{ textAlign:'right', padding:'10px 4px', fontSize:14, color:'var(--text-1)', fontWeight:600 }}>
+                  {l('total')}: ${total.toFixed(2)}
+                </div>
+              )}
+
+              {/* 行追加 + 保存 */}
+              <div style={{ display:'flex', gap:10, marginTop:12 }}>
+                <button onClick={addRow}
+                  style={{ flex:1, padding:'12px 0', borderRadius:10, border:'1px dashed var(--border)', background:'transparent', color:'var(--text-2)', fontSize:14, cursor:'pointer' }}>
+                  {l('addRow')}
+                </button>
+                <button onClick={saveAll} disabled={saving}
+                  style={{ flex:2, padding:'12px 0', borderRadius:10, border:'none', background: saving ? 'var(--bg-2)' : '#D85A30', color: saving ? 'var(--text-2)' : 'white', fontSize:14, fontWeight:600, cursor: saving ? 'not-allowed' : 'pointer' }}>
+                  {saving ? l('saving') : l('save')}
+                </button>
+              </div>
+
+              {/* 別の伝票 */}
+              <button onClick={() => { setStep('capture'); setImageUrl(''); setImageFile(null); setRows([]); }}
+                style={{ width:'100%', marginTop:10, padding:'10px 0', borderRadius:10, border:'1px solid var(--border)', background:'transparent', color:'var(--text-2)', fontSize:13, cursor:'pointer' }}>
+                {l('retry')}
+              </button>
+            </div>
+          )}
+
+          {/* Step: saved */}
+          {step === 'saved' && (
+            <div style={{ textAlign:'center', padding:'40px 0' }}>
+              <div style={{ fontSize:48, marginBottom:12 }}>✅</div>
+              <div style={{ fontSize:16, fontWeight:600, color:'var(--text-1)', marginBottom:24 }}>{l('saved')}</div>
+              <button onClick={() => { setStep('capture'); setImageUrl(''); setImageFile(null); setRows([]); }}
+                style={{ padding:'12px 32px', borderRadius:10, border:'none', background:'#D85A30', color:'white', fontSize:14, fontWeight:600, cursor:'pointer' }}>
+                {l('retry')}
+              </button>
+            </div>
+          )}
+
+          {/* 手動入力ボタン（画像なしでも入力できる） */}
+          {step === 'capture' && !imageUrl && (
+            <button onClick={() => { setRows([emptyRow()]); setStep('review'); }}
+              style={{ width:'100%', marginTop:10, padding:'12px 0', borderRadius:10, border:'1px solid var(--border)', background:'transparent', color:'var(--text-2)', fontSize:13, cursor:'pointer' }}>
+              ✏️ {lang==='en'?'Enter Manually':lang==='zh'?'手动输入':'手動で入力'}
+            </button>
+          )}
+        </>
+      )}
+
+      {/* ── 履歴タブ ── */}
+      {historyTab === 'history' && (
+        <div>
+          {history.length === 0 ? (
+            <div style={{ textAlign:'center', padding:'40px 0', color:'var(--text-2)', fontSize:14 }}>{l('noHistory')}</div>
+          ) : (
+            <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+              {/* ベンダー別グループ表示 */}
+              {groupByVendorDate(history).map(group => (
+                <div key={group.key} style={{ background:'var(--bg-2)', borderRadius:12, overflow:'hidden', border:'1px solid var(--border)' }}>
+                  <div style={{ padding:'10px 14px', background:'var(--bg)', borderBottom:'1px solid var(--border)', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                    <span style={{ fontWeight:600, fontSize:14, color:'var(--text-1)' }}>{group.vendor}</span>
+                    <span style={{ fontSize:12, color:'var(--text-2)' }}>{group.date} · {group.items.length}品目</span>
+                  </div>
+                  <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12 }}>
+                    <tbody>
+                      {group.items.map(it => (
+                        <tr key={it.id} style={{ borderBottom:'1px solid var(--border)' }}>
+                          <td style={{ padding:'8px 14px', color:'var(--text-1)' }}>{it.item_name}{it.item_code ? <span style={{ color:'var(--text-2)', marginLeft:6 }}>#{it.item_code}</span> : ''}</td>
+                          <td style={{ padding:'8px 14px', color:'var(--text-2)', textAlign:'right', whiteSpace:'nowrap' }}>
+                            {it.unit_price != null ? `$${parseFloat(it.unit_price).toFixed(2)}` : '—'} × {it.quantity != null ? it.quantity : '—'}
+                          </td>
+                          <td style={{ padding:'8px 14px', fontWeight:600, color:'var(--text-1)', textAlign:'right', whiteSpace:'nowrap' }}>
+                            {it.unit_price != null && it.quantity != null
+                              ? `$${(parseFloat(it.unit_price) * parseFloat(it.quantity)).toFixed(2)}`
+                              : '—'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── ヘルパー ──────────────────────────────────────────
+const inputStyle = {
+  width:'100%', padding:'5px 6px', fontSize:12,
+  border:'1px solid var(--border)', borderRadius:6,
+  background:'var(--bg)', color:'var(--text-1)',
+  outline:'none',
+};
+
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result.split(',')[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function groupByVendorDate(items) {
+  const map = {};
+  for (const it of items) {
+    const date = it.delivered_date ? it.delivered_date.slice(0,10) : '不明';
+    const key = `${it.vendor || '不明'}_${date}`;
+    if (!map[key]) map[key] = { key, vendor: it.vendor || '不明', date, items: [] };
+    map[key].items.push(it);
+  }
+  return Object.values(map).sort((a,b) => b.date.localeCompare(a.date));
 }
