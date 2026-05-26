@@ -2152,7 +2152,7 @@ function ReceiptTab({ lang, t, showToast }) {
                         <td style={{ padding:'6px 4px' }}>
                           <input value={row.note} onChange={e => updateRow(row.id, 'note', e.target.value)} style={{...inputStyle, minWidth:80}} />
                         </td>
-                        {/* 削除 */
+                        {/* 削除 */}
                         <td style={{ padding:'6px 4px' }}>
                           <button onClick={() => deleteRow(row.id)}
                             style={{ padding:'4px 8px', fontSize:11, border:'1px solid var(--border)', borderRadius:6, background:'transparent', color:'#e55', cursor:'pointer' }}>
