@@ -101,10 +101,20 @@ async function initDB() {
       note          TEXT DEFAULT '',
       image_url     TEXT DEFAULT '',
       tax_amount    NUMERIC(10,2) DEFAULT 0,
+      subtotal      NUMERIC(10,2) DEFAULT 0,
+      total         NUMERIC(10,2) DEFAULT 0,
       created_at    TIMESTAMPTZ DEFAULT NOW()
     );
     DO $$ BEGIN
       ALTER TABLE deliveries ADD COLUMN IF NOT EXISTS tax_amount NUMERIC(10,2) DEFAULT 0;
+    EXCEPTION WHEN others THEN NULL;
+    END $$;
+    DO $$ BEGIN
+      ALTER TABLE deliveries ADD COLUMN IF NOT EXISTS subtotal NUMERIC(10,2) DEFAULT 0;
+    EXCEPTION WHEN others THEN NULL;
+    END $$;
+    DO $$ BEGIN
+      ALTER TABLE deliveries ADD COLUMN IF NOT EXISTS total NUMERIC(10,2) DEFAULT 0;
     EXCEPTION WHEN others THEN NULL;
     END $$;
     -- Add translation columns if missing
@@ -689,11 +699,14 @@ app.post('/api/analyze-receipt', async (req, res) => {
             },
             {
               type: 'text',
-              text: `この納品伝票・請求書・配達票・インボイスを詳細に読み取り、以下のJSON形式で返してください。JSONのみ返してください。マークダウンコードブロック不要です。会社名・ベンダー名・送り主名を必ず読み取ってください。
+              text: `この納品伝票・請求書・配達票・インボイスを詳細に読み取り、以下のJSON形式で返してください。JSONのみ返してください。マークダウンコードブロック不要です。会社名・ベンダー名・送り主名・税額・合計金額を必ず読み取ってください。
 
 {
   "vendor": "業者名・会社名（必ず読み取る）",
   "delivered_date": "YYYY-MM-DD形式（不明な場合は今日の日付）",
+  "subtotal": 小計金額（数値、不明はnull）,
+  "tax_amount": 税額合計（数値、複数税率がある場合は合算する、不明はnull）,
+  "total": 合計金額（数値、不明はnull）,
   "items": [
     {
       "item_name": "品名",
@@ -743,8 +756,8 @@ app.post(`/api/deliveries`, async (req, res) => {
     const inserted = [];
     for (const it of items) {
       const { rows } = await pool.query(
-        `INSERT INTO deliveries (vendor,item_name,item_code,unit_price,quantity,delivered_date,note,image_url,tax_amount) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
-        [it.vendor||'',it.item_name||'',it.item_code||'',it.unit_price??null,it.quantity??null,it.delivered_date||new Date().toISOString().slice(0,10),it.note||'',it.image_url||'',it.tax_amount??0]
+        `INSERT INTO deliveries (vendor,item_name,item_code,unit_price,quantity,delivered_date,note,image_url,tax_amount,subtotal,total) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
+        [it.vendor||'',it.item_name||'',it.item_code||'',it.unit_price??null,it.quantity??null,it.delivered_date||new Date().toISOString().slice(0,10),it.note||'',it.image_url||'',it.tax_amount??0,it.subtotal??0,it.total??0]
       );
       inserted.push(rows[0]);
     }
@@ -756,8 +769,8 @@ app.patch(`/api/deliveries/:id`, async (req, res) => {
   try {
     const { vendor,item_name,item_code,unit_price,quantity,delivered_date,note,tax_amount } = req.body;
     const { rows } = await pool.query(
-      `UPDATE deliveries SET vendor=$1,item_name=$2,item_code=$3,unit_price=$4,quantity=$5,delivered_date=$6,note=$7,tax_amount=$8 WHERE id=$9 RETURNING *`,
-      [vendor,item_name,item_code,unit_price,quantity,delivered_date,note,tax_amount||0,req.params.id]
+      `UPDATE deliveries SET vendor=$1,item_name=$2,item_code=$3,unit_price=$4,quantity=$5,delivered_date=$6,note=$7,tax_amount=$8,subtotal=$9,total=$10 WHERE id=$11 RETURNING *`,
+      [vendor,item_name,item_code,unit_price,quantity,delivered_date,note,tax_amount||0,subtotal||0,total||0,req.params.id]
     );
     if (!rows.length) return res.status(404).json({ error: 'not found' });
     res.json(rows[0]);

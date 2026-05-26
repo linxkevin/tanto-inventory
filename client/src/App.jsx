@@ -1831,6 +1831,7 @@ function ReceiptTab({ lang, t, showToast }) {
   const [imageUrl, setImageUrl]   = useState('');
   const [analyzing, setAnalyzing] = useState(false);
   const [rows, setRows]           = useState([]);
+  const [footer, setFooter]       = useState({ subtotal: '', tax_amount: '', total: '' });
   const [saving, setSaving]       = useState(false);
   const [history, setHistory]     = useState([]);
   const [historyTab, setHistoryTab] = useState('input'); // input | history
@@ -1916,6 +1917,11 @@ function ReceiptTab({ lang, t, showToast }) {
         newRows.push(emptyRow(detectedVendor, detectedDate));
       }
 
+      setFooter({
+        subtotal: parsed.subtotal != null ? String(parsed.subtotal) : '',
+        tax_amount: parsed.tax_amount != null ? String(parsed.tax_amount) : '',
+        total: parsed.total != null ? String(parsed.total) : '',
+      });
       setRows(newRows);
       setStep('review');
     } catch (err) {
@@ -1965,7 +1971,9 @@ function ReceiptTab({ lang, t, showToast }) {
         quantity: r.quantity !== '' ? parseFloat(r.quantity) : null,
         delivered_date: r.delivered_date,
         note: r.note,
-        tax_amount: r.tax_amount !== '' && r.tax_amount != null ? parseFloat(r.tax_amount) : 0,
+        tax_amount: footer.tax_amount !== '' ? parseFloat(footer.tax_amount) : 0,
+        subtotal: footer.subtotal !== '' ? parseFloat(footer.subtotal) : 0,
+        total: footer.total !== '' ? parseFloat(footer.total) : 0,
         image_url: '',
       }));
       const BASE = process.env.REACT_APP_API_URL || 'http://localhost:3001';
@@ -2103,7 +2111,7 @@ function ReceiptTab({ lang, t, showToast }) {
                 <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13, minWidth:600 }}>
                   <thead>
                     <tr style={{ background:'var(--bg-2)', color:'var(--text-2)' }}>
-                      {[l('date'), l('vendor'), l('itemName'), l('itemCode'), l('unitPrice'), l('quantity'), l('note'), l('tax'), ''].map((h,i) => (
+                      {[l('date'), l('vendor'), l('itemName'), l('itemCode'), l('unitPrice'), l('quantity'), l('note'), ''].map((h,i) => (
                         <th key={i} style={{ padding:'8px 6px', textAlign:'left', fontWeight:500, whiteSpace:'nowrap', borderBottom:'1px solid var(--border)' }}>{h}</th>
                       ))}
                     </tr>
@@ -2144,11 +2152,7 @@ function ReceiptTab({ lang, t, showToast }) {
                         <td style={{ padding:'6px 4px' }}>
                           <input value={row.note} onChange={e => updateRow(row.id, 'note', e.target.value)} style={{...inputStyle, minWidth:80}} />
                         </td>
-                        {/* 税額 */}
-                        <td style={{ padding:'6px 4px' }}>
-                          <input type="number" value={row.tax_amount||''} onChange={e => updateRow(row.id, 'tax_amount', e.target.value)} style={{...inputStyle, minWidth:70}} placeholder="0.00" />
-                        </td>
-                        {/* 削除 */}
+                        {/* 削除 */
                         <td style={{ padding:'6px 4px' }}>
                           <button onClick={() => deleteRow(row.id)}
                             style={{ padding:'4px 8px', fontSize:11, border:'1px solid var(--border)', borderRadius:6, background:'transparent', color:'#e55', cursor:'pointer' }}>
@@ -2168,6 +2172,28 @@ function ReceiptTab({ lang, t, showToast }) {
                 </div>
               )}
 
+              {/* 伝票フッター */}
+              <div style={{ marginTop:12, padding:'12px 14px', background:'var(--bg-2)', borderRadius:10, border:'1px solid var(--border)' }}>
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:10 }}>
+                  {[
+                    { key:'subtotal',   label: lang==='en'?'Subtotal':lang==='zh'?'小计':'小計' },
+                    { key:'tax_amount', label: lang==='en'?'Tax':lang==='zh'?'税额':'税額' },
+                    { key:'total',      label: lang==='en'?'Total':lang==='zh'?'合计':'合計' },
+                  ].map(({key, label}) => (
+                    <div key={key}>
+                      <div style={{ fontSize:11, color:'var(--text-2)', marginBottom:4 }}>{label}</div>
+                      <input
+                        type="number"
+                        value={footer[key]}
+                        onChange={e => setFooter(prev => ({...prev, [key]: e.target.value}))}
+                        placeholder="0.00"
+                        style={{...inputStyle, width:'100%', fontSize:14, padding:'6px 8px'}}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+
               {/* 行追加 + 保存 */}
               <div style={{ display:'flex', gap:10, marginTop:12 }}>
                 <button onClick={addRow}
@@ -2181,7 +2207,7 @@ function ReceiptTab({ lang, t, showToast }) {
               </div>
 
               {/* 別の伝票 */}
-              <button onClick={() => { setStep('capture'); setImageUrl(''); setImageFile(null); setRows([]); }}
+              <button onClick={() => { setStep('capture'); setImageUrl(''); setImageFile(null); setRows([]); setFooter({ subtotal: '', tax_amount: '', total: '' }); }}
                 style={{ width:'100%', marginTop:10, padding:'10px 0', borderRadius:10, border:'1px solid var(--border)', background:'transparent', color:'var(--text-2)', fontSize:13, cursor:'pointer' }}>
                 {l('retry')}
               </button>
@@ -2193,7 +2219,7 @@ function ReceiptTab({ lang, t, showToast }) {
             <div style={{ textAlign:'center', padding:'40px 0' }}>
               <div style={{ fontSize:48, marginBottom:12 }}>✅</div>
               <div style={{ fontSize:16, fontWeight:600, color:'var(--text-1)', marginBottom:24 }}>{l('saved')}</div>
-              <button onClick={() => { setStep('capture'); setImageUrl(''); setImageFile(null); setRows([]); }}
+              <button onClick={() => { setStep('capture'); setImageUrl(''); setImageFile(null); setRows([]); setFooter({ subtotal: '', tax_amount: '', total: '' }); }}
                 style={{ padding:'12px 32px', borderRadius:10, border:'none', background:'#D85A30', color:'white', fontSize:14, fontWeight:600, cursor:'pointer' }}>
                 {l('retry')}
               </button>
