@@ -1980,6 +1980,30 @@ function ReceiptTab({ lang, t, showToast }) {
     }
   };
 
+  // 行単位削除
+  const deleteItem = async (id) => {
+    if (!window.confirm('この行を削除しますか？')) return;
+    try {
+      const BASE = process.env.REACT_APP_API_URL || 'http://localhost:3001';
+      await fetch(`${BASE}/api/deliveries/${id}`, { method: 'DELETE' });
+      setHistory(prev => prev.filter(h => h.id !== id));
+    } catch (e) {
+      showToast('❌ 削除エラー: ' + e.message);
+    }
+  };
+
+  // グループ削除
+  const deleteGroup = async (ids) => {
+    if (!window.confirm(`${ids.length}件まとめて削除しますか？`)) return;
+    try {
+      const BASE = process.env.REACT_APP_API_URL || 'http://localhost:3001';
+      await Promise.all(ids.map(id => fetch(`${BASE}/api/deliveries/${id}`, { method: 'DELETE' })));
+      setHistory(prev => prev.filter(h => !ids.includes(h.id)));
+    } catch (e) {
+      showToast('❌ 削除エラー: ' + e.message);
+    }
+  };
+
   // 履歴取得
   const loadHistory = async () => {
     try {
@@ -2184,12 +2208,17 @@ function ReceiptTab({ lang, t, showToast }) {
             <div style={{ textAlign:'center', padding:'40px 0', color:'var(--text-2)', fontSize:14 }}>{l('noHistory')}</div>
           ) : (
             <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-              {/* ベンダー別グループ表示 */}
               {groupByVendorDate(history).map(group => (
                 <div key={group.key} style={{ background:'var(--bg-2)', borderRadius:12, overflow:'hidden', border:'1px solid var(--border)' }}>
                   <div style={{ padding:'10px 14px', background:'var(--bg)', borderBottom:'1px solid var(--border)', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-                    <span style={{ fontWeight:600, fontSize:14, color:'var(--text-1)' }}>{group.vendor}</span>
-                    <span style={{ fontSize:12, color:'var(--text-2)' }}>{group.date} · {group.items.length}品目</span>
+                    <div>
+                      <span style={{ fontWeight:600, fontSize:14, color:'var(--text-1)' }}>{group.vendor}</span>
+                      <span style={{ fontSize:12, color:'var(--text-2)', marginLeft:10 }}>{group.date} · {group.items.length}品目</span>
+                    </div>
+                    <button onClick={() => deleteGroup(group.items.map(i => i.id))}
+                      style={{ padding:'4px 10px', fontSize:11, border:'1px solid #e55', borderRadius:6, background:'transparent', color:'#e55', cursor:'pointer', whiteSpace:'nowrap' }}>
+                      グループ削除
+                    </button>
                   </div>
                   <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12 }}>
                     <tbody>
@@ -2203,6 +2232,12 @@ function ReceiptTab({ lang, t, showToast }) {
                             {it.unit_price != null && it.quantity != null
                               ? `$${(parseFloat(it.unit_price) * parseFloat(it.quantity)).toFixed(2)}`
                               : '—'}
+                          </td>
+                          <td style={{ padding:'8px 6px', textAlign:'right' }}>
+                            <button onClick={() => deleteItem(it.id)}
+                              style={{ padding:'3px 8px', fontSize:11, border:'1px solid #e55', borderRadius:6, background:'transparent', color:'#e55', cursor:'pointer' }}>
+                              削除
+                            </button>
                           </td>
                         </tr>
                       ))}
