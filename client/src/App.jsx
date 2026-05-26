@@ -1881,42 +1881,11 @@ function ReceiptTab({ lang, t, showToast }) {
       const base64 = await fileToBase64(imageFile);
       const mediaType = imageFile.type || 'image/jpeg';
 
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
+      const _BASE = process.env.REACT_APP_API_URL || 'http://localhost:3001';
+      const response = await fetch(`${_BASE}/api/analyze-receipt`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
-          max_tokens: 1000,
-          messages: [{
-            role: 'user',
-            content: [
-              {
-                type: 'image',
-                source: { type: 'base64', media_type: mediaType, data: base64 }
-              },
-              {
-                type: 'text',
-                text: `この納品伝票・請求書・配達票・インボイスを詳細に読み取り、以下のJSON形式で返してください。JSONのみ返してください。マークダウンコードブロック不要です。会社名・ベンダー名・送り主名を必ず読み取ってください。
-
-{
-  "vendor": "業者名（不明な場合は空文字）",
-  "delivered_date": "YYYY-MM-DD形式（不明な場合は今日の日付）",
-  "items": [
-    {
-      "item_name": "品名",
-      "item_code": "品番（なければ空文字）",
-      "unit_price": 数値（不明はnull）,
-      "quantity": 数値（不明はnull）,
-      "note": "備考（なければ空文字）"
-    }
-  ]
-}
-
-今日の日付: ${new Date().toISOString().slice(0,10)}`
-              }
-            ]
-          }]
-        })
+        body: JSON.stringify({ image: base64, mediaType: mediaType })
       });
 
       const data = await response.json();

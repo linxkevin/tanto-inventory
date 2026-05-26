@@ -657,6 +657,62 @@ async function seedCategories() {
 
 // ── Start ─────────────────────────────────────────────
 
+
+// ── Receipt AI Analysis ───────────────────────────────
+app.post('/api/analyze-receipt', async (req, res) => {
+  try {
+    const { image, mediaType } = req.body;
+    if (!image) return res.status(400).json({ error: 'image required' });
+
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': process.env.ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1000,
+        messages: [{
+          role: 'user',
+          content: [
+            {
+              type: 'image',
+              source: { type: 'base64', media_type: mediaType || 'image/jpeg', data: image }
+            },
+            {
+              type: 'text',
+              text: `この納品伝票・請求書・配達票・インボイスを詳細に読み取り、以下のJSON形式で返してください。JSONのみ返してください。マークダウンコードブロック不要です。会社名・ベンダー名・送り主名を必ず読み取ってください。
+
+{
+  "vendor": "業者名・会社名（必ず読み取る）",
+  "delivered_date": "YYYY-MM-DD形式（不明な場合は今日の日付）",
+  "items": [
+    {
+      "item_name": "品名",
+      "item_code": "品番（なければ空文字）",
+      "unit_price": 数値（不明はnull）,
+      "quantity": 数値（不明はnull）,
+      "note": "備考（なければ空文字）"
+    }
+  ]
+}
+
+今日の日付: ${new Date().toISOString().slice(0,10)}`
+            }
+          ]
+        }]
+      })
+    });
+
+    const data = await response.json();
+    res.json(data);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── Deliveries API ────────────────────────────────────
 app.get(`/api/deliveries`, async (req, res) => {
   try {
