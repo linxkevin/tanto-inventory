@@ -1821,9 +1821,9 @@ function AdminArea({ lang, t, items, sessions, location, activeTab, setActiveTab
 }
 
 
-const VENDORS_JA = ['JFC','CHERRY','WISMETTAC','KUKUI FOOD','SELECT SEVEN','SUN NOODLE','FUKUOKA PACKAGE','その他'];
-const VENDORS_EN = ['JFC','CHERRY','WISMETTAC','KUKUI FOOD','SELECT SEVEN','SUN NOODLE','FUKUOKA PACKAGE','Other'];
-const VENDORS_ZH = ['JFC','CHERRY','WISMETTAC','KUKUI FOOD','SELECT SEVEN','SUN NOODLE','FUKUOKA PACKAGE','其他'];
+const VENDORS_JA = ['Wismettac Asian Foods, Inc.','The Cherry Co., Ltd.','JFC International INC.','KUKUI FOOD','Select 7, Inc.','Sun Noodle','Fukuoka Package USA, Inc.','その他'];
+const VENDORS_EN = ['Wismettac Asian Foods, Inc.','The Cherry Co., Ltd.','JFC International INC.','KUKUI FOOD','Select 7, Inc.','Sun Noodle','Fukuoka Package USA, Inc.','Other'];
+const VENDORS_ZH = ['Wismettac Asian Foods, Inc.','The Cherry Co., Ltd.','JFC International INC.','KUKUI FOOD','Select 7, Inc.','Sun Noodle','Fukuoka Package USA, Inc.','其他'];
 
 function ReceiptTab({ lang, t, showToast }) {
   const [step, setStep]           = useState('capture'); // capture | review | saved
