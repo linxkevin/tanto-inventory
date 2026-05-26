@@ -2341,12 +2341,18 @@ function MonthlyTab({ history, lang, l }) {
 
   // ベンダー別集計
   const vendorMap = {};
+  // tax_amountは伝票単位（delivered_date+vendor）で1回だけ加算する
+  const taxCounted = new Set();
   for (const it of filtered) {
     const v = it.vendor || '不明';
     if (!vendorMap[v]) vendorMap[v] = { subtotal: 0, tax: 0 };
     const price = (parseFloat(it.unit_price) || 0) * (parseFloat(it.quantity) || 0);
     vendorMap[v].subtotal += price;
-    vendorMap[v].tax += parseFloat(it.tax_amount) || 0;
+    const taxKey = `${v}_${(it.delivered_date||'').slice(0,10)}`;
+    if (!taxCounted.has(taxKey)) {
+      vendorMap[v].tax += parseFloat(it.tax_amount) || 0;
+      taxCounted.add(taxKey);
+    }
   }
   const vendors = Object.entries(vendorMap).sort((a,b) => b[1].subtotal - a[1].subtotal);
   const grandTotal = vendors.reduce((s, [,v]) => s + v.subtotal, 0);
