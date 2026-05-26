@@ -1856,8 +1856,12 @@ function ReceiptTab({ lang, t, showToast }) {
     history:     { ja:'納品履歴',             en:'Delivery History',     zh:'入库历史' },
     input:       { ja:'伝票入力',             en:'Enter Receipt',        zh:'录入单据' },
     noHistory:   { ja:'履歴なし',             en:'No history',           zh:'暂无记录' },
+    monthly:     { ja:'月次集計',             en:'Monthly Summary',      zh:'月度汇总' },
+    subtotal:    { ja:'小計',                 en:'Subtotal',             zh:'小计' },
+    grandTotal:  { ja:'総計',                 en:'Grand Total',          zh:'总计' },
     total:       { ja:'合計',                 en:'Total',                zh:'合计' },
     note:        { ja:'備考',                 en:'Note',                 zh:'备注' },
+    tax:         { ja:'税額',                 en:'Tax',                  zh:'税额' },
     deleteRow:   { ja:'削除',                 en:'Del',                  zh:'删' },
     aiHint:      { ja:'伝票の写真を選ぶとAIが自動で読み取ります', en:'Select a photo of the delivery slip — AI will read it automatically', zh:'选择送货单照片，AI将自动识别内容' },
   };
@@ -1961,6 +1965,7 @@ function ReceiptTab({ lang, t, showToast }) {
         quantity: r.quantity !== '' ? parseFloat(r.quantity) : null,
         delivered_date: r.delivered_date,
         note: r.note,
+        tax_amount: r.tax_amount !== '' && r.tax_amount != null ? parseFloat(r.tax_amount) : 0,
         image_url: '',
       }));
       const BASE = process.env.REACT_APP_API_URL || 'http://localhost:3001';
@@ -2031,7 +2036,7 @@ function ReceiptTab({ lang, t, showToast }) {
     <div style={{ padding: '0 0 80px' }}>
       {/* サブタブ */}
       <div style={{ display:'flex', gap:4, marginBottom:16, background:'var(--bg-2)', padding:4, borderRadius:10 }}>
-        {['input','history'].map(tt => (
+        {['input','history','monthly'].map(tt => (
           <button key={tt}
             onClick={() => setHistoryTab(tt)}
             style={{
@@ -2098,7 +2103,7 @@ function ReceiptTab({ lang, t, showToast }) {
                 <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13, minWidth:600 }}>
                   <thead>
                     <tr style={{ background:'var(--bg-2)', color:'var(--text-2)' }}>
-                      {[l('date'), l('vendor'), l('itemName'), l('itemCode'), l('unitPrice'), l('quantity'), l('note'), ''].map((h,i) => (
+                      {[l('date'), l('vendor'), l('itemName'), l('itemCode'), l('unitPrice'), l('quantity'), l('note'), l('tax'), ''].map((h,i) => (
                         <th key={i} style={{ padding:'8px 6px', textAlign:'left', fontWeight:500, whiteSpace:'nowrap', borderBottom:'1px solid var(--border)' }}>{h}</th>
                       ))}
                     </tr>
@@ -2138,6 +2143,10 @@ function ReceiptTab({ lang, t, showToast }) {
                         {/* 備考 */}
                         <td style={{ padding:'6px 4px' }}>
                           <input value={row.note} onChange={e => updateRow(row.id, 'note', e.target.value)} style={{...inputStyle, minWidth:80}} />
+                        </td>
+                        {/* 税額 */}
+                        <td style={{ padding:'6px 4px' }}>
+                          <input type="number" value={row.tax_amount||''} onChange={e => updateRow(row.id, 'tax_amount', e.target.value)} style={{...inputStyle, minWidth:70}} placeholder="0.00" />
                         </td>
                         {/* 削除 */}
                         <td style={{ padding:'6px 4px' }}>
@@ -2199,6 +2208,11 @@ function ReceiptTab({ lang, t, showToast }) {
             </button>
           )}
         </>
+      )}
+
+      {/* ── 月次集計タブ ── */}
+      {historyTab === 'monthly' && (
+        <MonthlyTab history={history} lang={lang} l={l} />
       )}
 
       {/* ── 履歴タブ ── */}
@@ -2290,6 +2304,87 @@ function fileToBase64Resized(file, maxWidth = 1600, quality = 0.85) {
     reader.onerror = reject;
     reader.readAsDataURL(file);
   });
+}
+
+
+function MonthlyTab({ history, lang, l }) {
+  const months = [...new Set(history.map(h => (h.delivered_date || '').slice(0,7)))].filter(Boolean).sort().reverse();
+  const [selectedMonth, setSelectedMonth] = useState(months[0] || '');
+
+  const filtered = history.filter(h => (h.delivered_date || '').startsWith(selectedMonth));
+
+  // ベンダー別集計
+  const vendorMap = {};
+  for (const it of filtered) {
+    const v = it.vendor || '不明';
+    if (!vendorMap[v]) vendorMap[v] = { subtotal: 0, tax: 0 };
+    const price = (parseFloat(it.unit_price) || 0) * (parseFloat(it.quantity) || 0);
+    vendorMap[v].subtotal += price;
+    vendorMap[v].tax += parseFloat(it.tax_amount) || 0;
+  }
+  const vendors = Object.entries(vendorMap).sort((a,b) => b[1].subtotal - a[1].subtotal);
+  const grandTotal = vendors.reduce((s, [,v]) => s + v.subtotal, 0);
+  const grandTax = vendors.reduce((s, [,v]) => s + v.tax, 0);
+
+  const formatMonth = (m) => {
+    if (!m) return '';
+    const [y, mo] = m.split('-');
+    return lang === 'en' ? `${new Date(y, mo-1).toLocaleString('en', {month:'long'})} ${y}` : `${y}年${parseInt(mo)}月`;
+  };
+
+  return (
+    <div>
+      {/* 月選択 */}
+      <div style={{ display:'flex', gap:8, marginBottom:16, overflowX:'auto', paddingBottom:4 }}>
+        {months.map(m => (
+          <button key={m} onClick={() => setSelectedMonth(m)}
+            style={{
+              padding:'6px 14px', borderRadius:20, border:'1px solid var(--border)', whiteSpace:'nowrap',
+              background: selectedMonth===m ? '#D85A30' : 'var(--bg-2)',
+              color: selectedMonth===m ? 'white' : 'var(--text-2)',
+              fontSize:13, cursor:'pointer', fontWeight: selectedMonth===m ? 600 : 400,
+            }}>
+            {formatMonth(m)}
+          </button>
+        ))}
+      </div>
+
+      {vendors.length === 0 ? (
+        <div style={{ textAlign:'center', padding:'40px 0', color:'var(--text-2)', fontSize:14 }}>{l('noHistory')}</div>
+      ) : (
+        <div style={{ display:'flex', flexDirection:'column', gap:1, borderRadius:12, overflow:'hidden', border:'1px solid var(--border)' }}>
+          {/* ヘッダー */}
+          <div style={{ display:'grid', gridTemplateColumns:'1fr auto auto', gap:16, padding:'10px 16px', background:'var(--bg-2)', fontSize:12, color:'var(--text-2)', fontWeight:500 }}>
+            <span>{lang==='en'?'Vendor':lang==='zh'?'供应商':'業者'}</span>
+            <span style={{ textAlign:'right' }}>{lang==='en'?'Tax':lang==='zh'?'税额':'税額'}</span>
+            <span style={{ textAlign:'right', minWidth:90 }}>{lang==='en'?'Subtotal':lang==='zh'?'小计':'小計'}</span>
+          </div>
+          {/* ベンダー行 */}
+          {vendors.map(([vendor, data]) => (
+            <div key={vendor} style={{ display:'grid', gridTemplateColumns:'1fr auto auto', gap:16, padding:'12px 16px', background:'var(--bg)', borderTop:'1px solid var(--border)' }}>
+              <span style={{ fontSize:14, color:'var(--text-1)', fontWeight:500 }}>{vendor}</span>
+              <span style={{ fontSize:13, color:'var(--text-2)', textAlign:'right' }}>
+                {data.tax > 0 ? `$${data.tax.toFixed(2)}` : '—'}
+              </span>
+              <span style={{ fontSize:14, fontWeight:600, color:'var(--text-1)', textAlign:'right', minWidth:90 }}>
+                ${data.subtotal.toFixed(2)}
+              </span>
+            </div>
+          ))}
+          {/* 合計行 */}
+          <div style={{ display:'grid', gridTemplateColumns:'1fr auto auto', gap:16, padding:'12px 16px', background:'var(--bg-2)', borderTop:'2px solid var(--border)' }}>
+            <span style={{ fontSize:14, fontWeight:700, color:'var(--text-1)' }}>{lang==='en'?'Grand Total':lang==='zh'?'总计':'総計'}</span>
+            <span style={{ fontSize:13, color:'var(--text-2)', textAlign:'right' }}>
+              {grandTax > 0 ? `$${grandTax.toFixed(2)}` : '—'}
+            </span>
+            <span style={{ fontSize:15, fontWeight:700, color:'#D85A30', textAlign:'right', minWidth:90 }}>
+              ${grandTotal.toFixed(2)}
+            </span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function groupByVendorDate(items) {

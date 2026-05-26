@@ -100,8 +100,13 @@ async function initDB() {
       delivered_date DATE NOT NULL DEFAULT CURRENT_DATE,
       note          TEXT DEFAULT '',
       image_url     TEXT DEFAULT '',
+      tax_amount    NUMERIC(10,2) DEFAULT 0,
       created_at    TIMESTAMPTZ DEFAULT NOW()
     );
+    DO $$ BEGIN
+      ALTER TABLE deliveries ADD COLUMN IF NOT EXISTS tax_amount NUMERIC(10,2) DEFAULT 0;
+    EXCEPTION WHEN others THEN NULL;
+    END $$;
     -- Add translation columns if missing
     DO $$ BEGIN
       ALTER TABLE categories ADD COLUMN IF NOT EXISTS name_en TEXT;
@@ -738,8 +743,8 @@ app.post(`/api/deliveries`, async (req, res) => {
     const inserted = [];
     for (const it of items) {
       const { rows } = await pool.query(
-        `INSERT INTO deliveries (vendor,item_name,item_code,unit_price,quantity,delivered_date,note,image_url) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
-        [it.vendor||'',it.item_name||'',it.item_code||'',it.unit_price??null,it.quantity??null,it.delivered_date||new Date().toISOString().slice(0,10),it.note||'',it.image_url||'']
+        `INSERT INTO deliveries (vendor,item_name,item_code,unit_price,quantity,delivered_date,note,image_url,tax_amount) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+        [it.vendor||'',it.item_name||'',it.item_code||'',it.unit_price??null,it.quantity??null,it.delivered_date||new Date().toISOString().slice(0,10),it.note||'',it.image_url||'',it.tax_amount??0]
       );
       inserted.push(rows[0]);
     }
@@ -749,10 +754,10 @@ app.post(`/api/deliveries`, async (req, res) => {
 
 app.patch(`/api/deliveries/:id`, async (req, res) => {
   try {
-    const { vendor,item_name,item_code,unit_price,quantity,delivered_date,note } = req.body;
+    const { vendor,item_name,item_code,unit_price,quantity,delivered_date,note,tax_amount } = req.body;
     const { rows } = await pool.query(
-      `UPDATE deliveries SET vendor=$1,item_name=$2,item_code=$3,unit_price=$4,quantity=$5,delivered_date=$6,note=$7 WHERE id=$8 RETURNING *`,
-      [vendor,item_name,item_code,unit_price,quantity,delivered_date,note,req.params.id]
+      `UPDATE deliveries SET vendor=$1,item_name=$2,item_code=$3,unit_price=$4,quantity=$5,delivered_date=$6,note=$7,tax_amount=$8 WHERE id=$9 RETURNING *`,
+      [vendor,item_name,item_code,unit_price,quantity,delivered_date,note,tax_amount||0,req.params.id]
     );
     if (!rows.length) return res.status(404).json({ error: 'not found' });
     res.json(rows[0]);
