@@ -1821,9 +1821,9 @@ function AdminArea({ lang, t, items, sessions, location, activeTab, setActiveTab
 }
 
 
-const VENDORS_JA = ['Amfac','DOT','Nalo','Sysco','UMI','WISMETTAC','その他'];
-const VENDORS_EN = ['Amfac','DOT','Nalo','Sysco','UMI','WISMETTAC','Other'];
-const VENDORS_ZH = ['Amfac','DOT','Nalo','Sysco','UMI','WISMETTAC','其他'];
+const VENDORS_JA = ['JFC','CHERRY','WISMETTAC','KUKUI FOOD','SELECT SEVEN','SUN NOODLE','FUKUOKA PACKAGE','その他'];
+const VENDORS_EN = ['JFC','CHERRY','WISMETTAC','KUKUI FOOD','SELECT SEVEN','SUN NOODLE','FUKUOKA PACKAGE','Other'];
+const VENDORS_ZH = ['JFC','CHERRY','WISMETTAC','KUKUI FOOD','SELECT SEVEN','SUN NOODLE','FUKUOKA PACKAGE','其他'];
 
 function ReceiptTab({ lang, t, showToast }) {
   const [step, setStep]           = useState('capture'); // capture | review | saved
