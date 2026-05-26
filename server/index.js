@@ -14,7 +14,8 @@ const pool = new Pool({
 
 // ── Middleware ───────────────────────────────────────
 app.use(cors({ origin: process.env.CLIENT_URL || '*' }));
-app.use(express.json());
+app.use(express.json({ limit: '20mb' }));
+app.use(express.urlencoded({ limit: '20mb', extended: true }));
 
 // ── DB Init ─────────────────────────────────────────
 async function initDB() {
