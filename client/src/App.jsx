@@ -1878,8 +1878,8 @@ function ReceiptTab({ lang, t, showToast }) {
     if (!imageFile) return;
     setAnalyzing(true);
     try {
-      const base64 = await fileToBase64(imageFile);
-      const mediaType = imageFile.type || 'image/jpeg';
+      const base64 = await fileToBase64Resized(imageFile);
+      const mediaType = 'image/jpeg';
 
       const _BASE = process.env.REACT_APP_API_URL || 'http://localhost:3001';
       const response = await fetch(`${_BASE}/api/analyze-receipt`, {
@@ -2230,6 +2230,28 @@ function fileToBase64(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(reader.result.split(',')[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function fileToBase64Resized(file, maxWidth = 1600, quality = 0.85) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let w = img.width, h = img.height;
+        if (w > maxWidth) { h = Math.round(h * maxWidth / w); w = maxWidth; }
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        const dataUrl = canvas.toDataURL('image/jpeg', quality);
+        resolve(dataUrl.split(',')[1]);
+      };
+      img.onerror = reject;
+      img.src = e.target.result;
+    };
     reader.onerror = reject;
     reader.readAsDataURL(file);
   });
