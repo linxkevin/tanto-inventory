@@ -1831,7 +1831,7 @@ function ReceiptTab({ lang, t, showToast }) {
   const [imageUrl, setImageUrl]   = useState('');
   const [analyzing, setAnalyzing] = useState(false);
   const [rows, setRows]           = useState([]);
-  const [footer, setFooter]       = useState({ subtotal: '', tax_amount: '', total: '' });
+  const [footer, setFooter]       = useState({ invoice_no: '', subtotal: '', tax_amount: '', total: '' });
   const [saving, setSaving]       = useState(false);
   const [history, setHistory]     = useState([]);
   const [historyTab, setHistoryTab] = useState('input'); // input | history
@@ -1918,6 +1918,7 @@ function ReceiptTab({ lang, t, showToast }) {
       }
 
       setFooter({
+        invoice_no: parsed.invoice_no || '',
         subtotal: parsed.subtotal != null ? String(parsed.subtotal) : '',
         tax_amount: parsed.tax_amount != null ? String(parsed.tax_amount) : '',
         total: parsed.total != null ? String(parsed.total) : '',
@@ -1971,7 +1972,8 @@ function ReceiptTab({ lang, t, showToast }) {
         quantity: r.quantity !== '' ? parseFloat(r.quantity) : null,
         delivered_date: r.delivered_date,
         note: r.note,
-        tax_amount: footer.tax_amount !== '' ? parseFloat(footer.tax_amount) : 0,
+          invoice_no: footer.invoice_no || '',
+          tax_amount: footer.tax_amount !== '' ? parseFloat(footer.tax_amount) : 0,
         subtotal: footer.subtotal !== '' ? parseFloat(footer.subtotal) : 0,
         total: footer.total !== '' ? parseFloat(footer.total) : 0,
         image_url: '',
@@ -2174,8 +2176,9 @@ function ReceiptTab({ lang, t, showToast }) {
 
               {/* 伝票フッター */}
               <div style={{ marginTop:12, padding:'12px 14px', background:'var(--bg-2)', borderRadius:10, border:'1px solid var(--border)' }}>
-                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:10 }}>
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr 1fr', gap:10 }}>
                   {[
+                    { key:'invoice_no', label: lang==='en'?'Invoice #':lang==='zh'?'发票号':'請求書No.' },
                     { key:'subtotal',   label: lang==='en'?'Subtotal':lang==='zh'?'小计':'小計' },
                     { key:'tax_amount', label: lang==='en'?'Tax':lang==='zh'?'税额':'税額' },
                     { key:'total',      label: lang==='en'?'Total':lang==='zh'?'合计':'合計' },
@@ -2183,10 +2186,10 @@ function ReceiptTab({ lang, t, showToast }) {
                     <div key={key}>
                       <div style={{ fontSize:11, color:'var(--text-2)', marginBottom:4 }}>{label}</div>
                       <input
-                        type="number"
+                        type={key === 'invoice_no' ? 'text' : 'number'}
                         value={footer[key]}
                         onChange={e => setFooter(prev => ({...prev, [key]: e.target.value}))}
-                        placeholder="0.00"
+                        placeholder={key === 'invoice_no' ? 'INV-XXXX' : '0.00'}
                         style={{...inputStyle, width:'100%', fontSize:14, padding:'6px 8px'}}
                       />
                     </div>
@@ -2207,7 +2210,7 @@ function ReceiptTab({ lang, t, showToast }) {
               </div>
 
               {/* 別の伝票 */}
-              <button onClick={() => { setStep('capture'); setImageUrl(''); setImageFile(null); setRows([]); setFooter({ subtotal: '', tax_amount: '', total: '' }); }}
+              <button onClick={() => { setStep('capture'); setImageUrl(''); setImageFile(null); setRows([]); setFooter({ invoice_no: '', subtotal: '', tax_amount: '', total: '' }); }}
                 style={{ width:'100%', marginTop:10, padding:'10px 0', borderRadius:10, border:'1px solid var(--border)', background:'transparent', color:'var(--text-2)', fontSize:13, cursor:'pointer' }}>
                 {l('retry')}
               </button>
@@ -2219,7 +2222,7 @@ function ReceiptTab({ lang, t, showToast }) {
             <div style={{ textAlign:'center', padding:'40px 0' }}>
               <div style={{ fontSize:48, marginBottom:12 }}>✅</div>
               <div style={{ fontSize:16, fontWeight:600, color:'var(--text-1)', marginBottom:24 }}>{l('saved')}</div>
-              <button onClick={() => { setStep('capture'); setImageUrl(''); setImageFile(null); setRows([]); setFooter({ subtotal: '', tax_amount: '', total: '' }); }}
+              <button onClick={() => { setStep('capture'); setImageUrl(''); setImageFile(null); setRows([]); setFooter({ invoice_no: '', subtotal: '', tax_amount: '', total: '' }); }}
                 style={{ padding:'12px 32px', borderRadius:10, border:'none', background:'#D85A30', color:'white', fontSize:14, fontWeight:600, cursor:'pointer' }}>
                 {l('retry')}
               </button>
