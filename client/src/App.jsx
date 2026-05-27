@@ -1962,6 +1962,17 @@ function ReceiptTab({ lang, t, showToast }) {
     if (rows.length === 0) return;
     setSaving(true);
     try {
+      // Invoice No.重複チェック
+      if (footer.invoice_no) {
+        const BASE = process.env.REACT_APP_API_URL || 'http://localhost:3001';
+        const existing = await fetch(`${BASE}/api/deliveries?invoice_no=${encodeURIComponent(footer.invoice_no)}`).then(r => r.json());
+        if (existing.length > 0) {
+          const ok = window.confirm(`Invoice No. "${footer.invoice_no}" はすでに登録されています。\n上書きしますか？\n（既存データを削除して新しいデータを保存します）`);
+          if (!ok) { setSaving(false); return; }
+          // 既存データを削除
+          await Promise.all(existing.map(it => fetch(`${BASE}/api/deliveries/${it.id}`, { method: 'DELETE' })));
+        }
+      }
       const validRows = rows.filter(r => r.item_name.trim() !== '');
       if (validRows.length === 0) { showToast('❌ 品名を入力してください'); setSaving(false); return; }
       const payload = validRows.map(r => ({

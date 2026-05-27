@@ -741,13 +741,14 @@ app.post('/api/analyze-receipt', async (req, res) => {
 // ── Deliveries API ────────────────────────────────────
 app.get(`/api/deliveries`, async (req, res) => {
   try {
-    const { vendor, from, to } = req.query;
+    const { vendor, from, to, invoice_no } = req.query;
     let sql = `SELECT * FROM deliveries`;
     const params = [];
     const conds = [];
-    if (vendor) { params.push(vendor); conds.push(`vendor=$${params.length}`); }
-    if (from)   { params.push(from);   conds.push(`delivered_date>=$${params.length}`); }
-    if (to)     { params.push(to);     conds.push(`delivered_date<=$${params.length}`); }
+    if (vendor)     { params.push(vendor);     conds.push(`vendor=$${params.length}`); }
+    if (from)       { params.push(from);       conds.push(`delivered_date>=$${params.length}`); }
+    if (to)         { params.push(to);         conds.push(`delivered_date<=$${params.length}`); }
+    if (invoice_no) { params.push(invoice_no); conds.push(`invoice_no=$${params.length}`); }
     if (conds.length) sql += ' WHERE ' + conds.join(' AND ');
     sql += ' ORDER BY created_at DESC LIMIT 100';
     const { rows } = await pool.query(sql, params);
