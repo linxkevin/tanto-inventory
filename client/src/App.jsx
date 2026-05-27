@@ -2336,18 +2336,19 @@ function fileToBase64Resized(file, maxWidth = 1600, quality = 0.85) {
 function MonthlyTab({ history, lang, l }) {
   const months = [...new Set(history.map(h => (h.delivered_date || '').slice(0,7)))].filter(Boolean).sort().reverse();
   const [selectedMonth, setSelectedMonth] = useState(months[0] || '');
+  const [selectedVendor, setSelectedVendor] = useState(null);
 
   const filtered = history.filter(h => (h.delivered_date || '').startsWith(selectedMonth));
 
   // ベンダー別集計
   const vendorMap = {};
-  // tax_amountは伝票単位（delivered_date+vendor）で1回だけ加算する
   const taxCounted = new Set();
   for (const it of filtered) {
     const v = it.vendor || '不明';
-    if (!vendorMap[v]) vendorMap[v] = { subtotal: 0, tax: 0 };
+    if (!vendorMap[v]) vendorMap[v] = { subtotal: 0, tax: 0, items: [] };
     const price = (parseFloat(it.unit_price) || 0) * (parseFloat(it.quantity) || 0);
     vendorMap[v].subtotal += price;
+    vendorMap[v].items.push(it);
     const taxKey = `${v}_${(it.delivered_date||'').slice(0,10)}`;
     if (!taxCounted.has(taxKey)) {
       vendorMap[v].tax += parseFloat(it.tax_amount) || 0;
@@ -2364,12 +2365,15 @@ function MonthlyTab({ history, lang, l }) {
     return lang === 'en' ? `${new Date(y, mo-1).toLocaleString('en', {month:'long'})} ${y}` : `${y}年${parseInt(mo)}月`;
   };
 
+  // 選択業者の納品日別グループ
+  const vendorDetail = selectedVendor ? groupByVendorDate(vendorMap[selectedVendor]?.items || []) : [];
+
   return (
     <div>
       {/* 月選択 */}
       <div style={{ display:'flex', gap:8, marginBottom:16, overflowX:'auto', paddingBottom:4 }}>
         {months.map(m => (
-          <button key={m} onClick={() => setSelectedMonth(m)}
+          <button key={m} onClick={() => { setSelectedMonth(m); setSelectedVendor(null); }}
             style={{
               padding:'6px 14px', borderRadius:20, border:'1px solid var(--border)', whiteSpace:'nowrap',
               background: selectedMonth===m ? '#D85A30' : 'var(--bg-2)',
@@ -2380,6 +2384,44 @@ function MonthlyTab({ history, lang, l }) {
           </button>
         ))}
       </div>
+
+      {/* 業者詳細パネル */}
+      {selectedVendor && (
+        <div style={{ marginBottom:16, borderRadius:12, overflow:'hidden', border:'1px solid #D85A30' }}>
+          <div style={{ padding:'10px 14px', background:'#D85A30', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+            <span style={{ fontWeight:600, fontSize:14, color:'white' }}>{selectedVendor}</span>
+            <button onClick={() => setSelectedVendor(null)}
+              style={{ background:'transparent', border:'none', color:'white', fontSize:18, cursor:'pointer', lineHeight:1 }}>×</button>
+          </div>
+          {vendorDetail.map(group => (
+            <div key={group.key}>
+              <div style={{ padding:'8px 14px', background:'var(--bg-2)', borderTop:'1px solid var(--border)', fontSize:12, color:'var(--text-2)', fontWeight:500 }}>
+                {group.date} · {group.items.length}品目
+              </div>
+              <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12 }}>
+                <tbody>
+                  {group.items.sort((a,b) => (a.delivered_date||'').localeCompare(b.delivered_date||'')).map(it => (
+                    <tr key={it.id} style={{ borderTop:'1px solid var(--border)' }}>
+                      <td style={{ padding:'7px 14px', color:'var(--text-1)' }}>
+                        {it.item_name}
+                        {it.item_code ? <span style={{ color:'var(--text-2)', marginLeft:6, fontSize:11 }}>#{it.item_code}</span> : ''}
+                      </td>
+                      <td style={{ padding:'7px 14px', color:'var(--text-2)', textAlign:'right', whiteSpace:'nowrap' }}>
+                        {it.unit_price != null ? `$${parseFloat(it.unit_price).toFixed(2)}` : '—'} × {it.quantity != null ? it.quantity : '—'}
+                      </td>
+                      <td style={{ padding:'7px 14px', fontWeight:600, color:'var(--text-1)', textAlign:'right', whiteSpace:'nowrap' }}>
+                        {it.unit_price != null && it.quantity != null
+                          ? `$${(parseFloat(it.unit_price) * parseFloat(it.quantity)).toFixed(2)}`
+                          : '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ))}
+        </div>
+      )}
 
       {vendors.length === 0 ? (
         <div style={{ textAlign:'center', padding:'40px 0', color:'var(--text-2)', fontSize:14 }}>{l('noHistory')}</div>
@@ -2393,8 +2435,17 @@ function MonthlyTab({ history, lang, l }) {
           </div>
           {/* ベンダー行 */}
           {vendors.map(([vendor, data]) => (
-            <div key={vendor} style={{ display:'grid', gridTemplateColumns:'1fr auto auto', gap:16, padding:'12px 16px', background:'var(--bg)', borderTop:'1px solid var(--border)' }}>
-              <span style={{ fontSize:14, color:'var(--text-1)', fontWeight:500 }}>{vendor}</span>
+            <div key={vendor}
+              onClick={() => setSelectedVendor(selectedVendor===vendor ? null : vendor)}
+              style={{
+                display:'grid', gridTemplateColumns:'1fr auto auto', gap:16, padding:'12px 16px',
+                background: selectedVendor===vendor ? 'rgba(216,90,48,0.06)' : 'var(--bg)',
+                borderTop:'1px solid var(--border)', cursor:'pointer',
+                borderLeft: selectedVendor===vendor ? '3px solid #D85A30' : '3px solid transparent',
+              }}>
+              <span style={{ fontSize:14, color: selectedVendor===vendor ? '#D85A30' : 'var(--text-1)', fontWeight:600 }}>
+                {vendor} <span style={{ fontSize:11, fontWeight:400, color:'var(--text-2)' }}>▶ 詳細</span>
+              </span>
               <span style={{ fontSize:13, color:'var(--text-2)', textAlign:'right' }}>
                 {data.tax > 0 ? `$${data.tax.toFixed(2)}` : '—'}
               </span>
