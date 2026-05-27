@@ -2257,6 +2257,11 @@ function ReceiptTab({ lang, t, showToast }) {
                     <div>
                       <span style={{ fontWeight:600, fontSize:14, color:'var(--text-1)' }}>{group.vendor}</span>
                       <span style={{ fontSize:12, color:'var(--text-2)', marginLeft:10 }}>{group.date} · {group.items.length}品目</span>
+                      {group.items[0]?.invoice_no && (
+                        <span style={{ fontSize:11, color:'var(--text-2)', marginLeft:8, background:'var(--bg-2)', padding:'2px 7px', borderRadius:6, border:'1px solid var(--border)' }}>
+                          # {group.items[0].invoice_no}
+                        </span>
+                      )}
                     </div>
                     <button onClick={() => deleteGroup(group.items.map(i => i.id))}
                       style={{ padding:'4px 10px', fontSize:11, border:'1px solid #e55', borderRadius:6, background:'transparent', color:'#e55', cursor:'pointer', whiteSpace:'nowrap' }}>
@@ -2398,8 +2403,13 @@ function MonthlyTab({ history, lang, l }) {
           </div>
           {vendorDetail.map(group => (
             <div key={group.key}>
-              <div style={{ padding:'8px 14px', background:'var(--bg-2)', borderTop:'1px solid var(--border)', fontSize:12, color:'var(--text-2)', fontWeight:500 }}>
-                {group.date} · {group.items.length}品目
+              <div style={{ padding:'8px 14px', background:'var(--bg-2)', borderTop:'1px solid var(--border)', fontSize:12, color:'var(--text-2)', fontWeight:500, display:'flex', justifyContent:'space-between' }}>
+                <span>{group.date} · {group.items.length}品目</span>
+                {group.items[0]?.invoice_no && (
+                  <span style={{ background:'var(--bg)', padding:'1px 7px', borderRadius:6, border:'1px solid var(--border)' }}>
+                    # {group.items[0].invoice_no}
+                  </span>
+                )}
               </div>
               <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12 }}>
                 <tbody>
