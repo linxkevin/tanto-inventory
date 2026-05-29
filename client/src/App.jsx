@@ -1761,9 +1761,10 @@ function AdminLock({ lang, onUnlock }) {
 // ─────────────────────────────────────────────────────
 function AdminArea({ lang, t, items, sessions, location, activeTab, setActiveTab, adminEmail, setAdminEmail, setItems, showToast, categories, setCategories }) {
   const subTabs = [
-    { key:'admin',    labelJa:'発注',  labelEn:'Orders',   labelZh:'订货' },
-    { key:'history',  labelJa:'履歴',  labelEn:'History',  labelZh:'历史' },
-    { key:'settings', labelJa:'設定',  labelEn:'Settings', labelZh:'设置' },
+    { key:'order',    labelJa:'📋 発注',  labelEn:'📋 Order',    labelZh:'📋 发单' },
+    { key:'admin',    labelJa:'📦 棚卸し', labelEn:'📦 Inventory', labelZh:'📦 盘点' },
+    { key:'history',  labelJa:'履歴',     labelEn:'History',      labelZh:'历史' },
+    { key:'settings', labelJa:'設定',     labelEn:'Settings',     labelZh:'设置' },
   ];
 
   function label(tab) {
@@ -1797,6 +1798,10 @@ function AdminArea({ lang, t, items, sessions, location, activeTab, setActiveTab
       </div>
 
       {/* Sub-tab content */}
+      {currentTab === 'order' && (
+        <OrderTab lang={lang} t={t} items={items} showToast={showToast} />
+      )}
+
       {currentTab === 'admin' && (
         <AdminTab
           lang={lang} t={t} items={items} sessions={sessions}
@@ -2351,6 +2356,393 @@ function fileToBase64Resized(file, maxWidth = 1600, quality = 0.85) {
   });
 }
 
+
+
+// ── OrderTab ──────────────────────────────────────────
+const VENDOR_MASTER = {
+  'JFC International INC.': {
+    email: 'Wnakai@jfc.com',
+    cc: 'master@tanto-otabe.com,sales@tanto-otabe.com',
+    days: '月〜金（土日定休）',
+    cutoff: '前日14時まで',
+  },
+  'The Cherry Co., Ltd.': {
+    email: 'ikko@mutual.us',
+    cc: 'master@tanto-otabe.com,sales@tanto-otabe.com',
+    days: '月〜土',
+    cutoff: '前日まで',
+  },
+  'Wismettac Asian Foods, Inc.': {
+    email: 'yoshihiro.hotsuki@wismettacusa.com',
+    cc: 'master@tanto-otabe.com,sales@tanto-otabe.com',
+    days: '月・木',
+    cutoff: '前日まで',
+  },
+  'KUKUI FOOD': {
+    email: 'Jona1331@hotmail.com,dbfujii@gmail.com',
+    cc: 'master@tanto-otabe.com,sales@tanto-otabe.com',
+    days: '月〜土（日定休）',
+    cutoff: '前日まで',
+  },
+  'Fukuoka Package USA, Inc.': {
+    email: 'hi-sales@fukupa.com',
+    cc: 'master@tanto-otabe.com,sales@tanto-otabe.com',
+    days: '月〜金',
+    cutoff: '15時まで',
+  },
+};
+
+const VENDOR_ITEMS = {
+  'JFC International INC.': [
+    {name:'料理酒',unit:'箱'},{name:'本みりん',unit:'箱'},{name:'醤油',unit:'箱'},
+    {name:'片栗粉',unit:'袋'},{name:'マヨネーズ（大）',unit:'本'},{name:'チキンパウダーEX',unit:'袋'},
+    {name:'豆腐',unit:'丁'},{name:'オニオンフライ',unit:'袋'},{name:'シラチャソース',unit:'本'},
+    {name:'味の素',unit:'袋'},{name:'たこ焼き',unit:'袋'},{name:'サーモン',unit:'袋'},
+    {name:'アサリ',unit:'袋'},{name:'たい焼き',unit:'袋'},{name:'ごま油',unit:'本'},
+    {name:'椎茸',unit:'袋'},{name:'昆布だし',unit:'袋'},{name:'板のり',unit:'袋'},
+    {name:'刻みのり',unit:'袋'},{name:'アイスクリーム',unit:'個'},
+    {name:'サッポロビール',unit:'樽'},{name:'獺祭',unit:'本'},{name:'樽回収',unit:'本'},
+  ],
+  'The Cherry Co., Ltd.': [
+    {name:'メンマ',unit:'袋'},{name:'紅生姜',unit:'袋'},{name:'コーン',unit:'缶'},
+    {name:'枝豆',unit:'袋'},{name:'フレンチフライ',unit:'箱'},{name:'たこわさ',unit:'袋'},
+    {name:'三温糖',unit:'袋'},{name:'一味',unit:'袋'},{name:'七味',unit:'袋'},
+    {name:'輪切り唐辛子',unit:'袋'},{name:'わかめ',unit:'袋'},{name:'キクラゲ',unit:'袋'},
+    {name:'糸削り節',unit:'袋'},{name:'胡麻ドレ',unit:'本'},{name:'ごまペースト',unit:'袋'},
+    {name:'いりごま',unit:'袋'},{name:'すりごま',unit:'袋'},{name:'合わせ味噌',unit:'袋'},
+    {name:'赤味噌',unit:'個'},{name:'おろし生姜',unit:'個'},{name:'ニンニクおろし',unit:'個'},
+    {name:'明太子チューブ',unit:'個'},{name:'バター',unit:'箱'},{name:'お好みソース',unit:'本'},
+    {name:'豆板醤',unit:'個'},{name:'精製塩',unit:'袋'},{name:'ホワイトペッパー',unit:'缶'},
+    {name:'昆布茶',unit:'袋'},{name:'ラー油',unit:'本'},{name:'山椒',unit:'袋'},
+    {name:'カレーフレーク',unit:'袋'},{name:'柚子胡椒',unit:'個'},{name:'アサリ',unit:'袋'},
+    {name:'サラダ油',unit:'本'},{name:'シャンタンベース',unit:'個'},{name:'フライドオニオン',unit:'袋'},
+    {name:'フライドガーリック',unit:'袋'},{name:'小麦粉',unit:'袋'},{name:'オニオンドレッシング',unit:'本'},
+    {name:'豚バラ串',unit:'箱'},{name:'むき海老',unit:'袋'},{name:'板のり',unit:'袋'},
+    {name:'板のり 1/3',unit:'袋'},{name:'椎茸 5LB',unit:'袋'},{name:'ゆかり',unit:'袋'},
+    {name:'八海山',unit:'本'},{name:'久保田',unit:'本'},{name:'松竹梅 超辛',unit:'6本'},
+    {name:'いいちこ瓶',unit:'本'},{name:'抹茶ビール',unit:'箱'},
+  ],
+  'Wismettac Asian Foods, Inc.': [
+    {name:'ブラックガーリックオイル',unit:'袋'},{name:'お米',unit:'袋'},
+    {name:'リッキー',unit:'箱'},{name:'出汁パック',unit:'袋'},
+    {name:'黒霧島',unit:'本'},{name:'ゆずぽん',unit:'本'},
+    {name:'酢',unit:'箱'},{name:'鶏油',unit:'袋'},
+  ],
+  'KUKUI FOOD': [
+    {name:'Pork Ground',unit:'LB'},{name:'Boneless Pork Butt Whole',unit:'LB'},
+    {name:'Pork Belly Slice 1.5mm',unit:'LB'},{name:'Pork Fat No Skin',unit:'LB'},
+    {name:'Boneless Chicken Thigh',unit:'LB'},{name:'Chicken Bone 10LB Cut',unit:'LB'},
+    {name:'Chicken Paws',unit:'LB'},
+  ],
+  'Fukuoka Package USA, Inc.': [
+    {name:'FP16-11 White Paper Box',unit:'CS'},{name:'FP21-14 White Paper Box',unit:'CS'},
+    {name:'9" Full Wrapped Bamboo Chopsticks',unit:'CS'},{name:'1-Ply Dinner Napkin',unit:'CS'},
+    {name:'Multifold Paper Towel',unit:'CS'},
+  ],
+};
+
+function OrderTab({ lang, t, items, showToast }) {
+  const today = new Date().toISOString().slice(0,10);
+  const [step, setStep]             = useState('form'); // form | confirm | sent
+  const [vendor, setVendor]         = useState('');
+  const [orderDate, setOrderDate]   = useState(today);
+  const [deliveryDate, setDelivDate]= useState('');
+  const [person, setPerson]         = useState('');
+  const [memo, setMemo]             = useState('');
+  const [quantities, setQuantities] = useState({});
+  const [sending, setSending]       = useState(false);
+  const [orders, setOrders]         = useState([]);
+  const [orderSubTab, setOrderSubTab] = useState('new'); // new | history
+
+  const vendors = Object.keys(VENDOR_MASTER);
+  const vendorItems = vendor ? (VENDOR_ITEMS[vendor] || []) : [];
+  const orderedItems = vendorItems.filter(it => quantities[it.name] > 0);
+
+  useEffect(() => { loadOrders(); }, []);
+
+  const loadOrders = async () => {
+    try {
+      const data = await api.getOrders();
+      setOrders(data);
+    } catch(e) { console.error(e); }
+  };
+
+  const updateQty = (name, val) => {
+    setQuantities(prev => ({ ...prev, [name]: val === '' ? '' : parseFloat(val) || 0 }));
+  };
+
+  const resetForm = () => {
+    setVendor(''); setOrderDate(today); setDelivDate('');
+    setPerson(''); setMemo(''); setQuantities({});
+    setStep('form');
+  };
+
+  const sendOrder = async () => {
+    setSending(true);
+    try {
+      const payload = {
+        vendor,
+        order_date: orderDate,
+        delivery_date: deliveryDate || null,
+        person,
+        memo,
+        items: orderedItems.map(it => ({
+          item_name: it.name,
+          unit: it.unit,
+          quantity: quantities[it.name],
+          note: '',
+        })),
+      };
+      const order = await api.postOrder(payload);
+
+      // Gmail送信
+      const vm = VENDOR_MASTER[vendor];
+      const subject = `TANTO Order - ${vendor} - ${orderDate}`;
+      let body = `TANTO Gyoza & Ramen Bar\n発注日: ${orderDate}\n`;
+      if (deliveryDate) body += `納品希望日: ${deliveryDate}\n`;
+      if (person) body += `担当: ${person}\n`;
+      if (memo) body += `\nメモ: ${memo}\n`;
+      body += `\nPO番号: ${order.po_number}\n`;
+      body += `${'─'.repeat(30)}\n\n`;
+      body += `品目\t単位\t数量\n`;
+      orderedItems.forEach(it => {
+        body += `${it.name}\t${it.unit}\t${quantities[it.name]}\n`;
+      });
+      body += `\n${'─'.repeat(30)}\n以上、よろしくお願いいたします。\nTanto Gyoza & Ramen Bar`;
+
+      const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(vm.email)}&cc=${encodeURIComponent(vm.cc)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+      window.open(gmailUrl, '_blank');
+
+      showToast(`✅ ${order.po_number} を保存しました`);
+      setStep('sent');
+      loadOrders();
+    } catch(e) {
+      showToast('❌ エラー: ' + e.message);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const L = {
+    newOrder:   { ja:'新規発注',    en:'New Order',    zh:'新建订单' },
+    history:    { ja:'発注履歴',    en:'Order History', zh:'发单历史' },
+    vendor:     { ja:'業者',        en:'Vendor',        zh:'供应商' },
+    orderDate:  { ja:'発注日',      en:'Order Date',    zh:'订货日' },
+    delivDate:  { ja:'納品希望日',  en:'Delivery Date', zh:'希望收货日' },
+    person:     { ja:'担当者',      en:'Person',        zh:'负责人' },
+    memo:       { ja:'メモ',        en:'Memo',          zh:'备注' },
+    next:       { ja:'確認へ',      en:'Review',        zh:'确认' },
+    back:       { ja:'戻る',        en:'Back',          zh:'返回' },
+    send:       { ja:'発注・Gmail送信', en:'Order & Send Gmail', zh:'下单' },
+    sending:    { ja:'送信中...',   en:'Sending...',    zh:'发送中...' },
+    newAnother: { ja:'次の発注',    en:'New Order',     zh:'再次发单' },
+    noItems:    { ja:'数量を入力してください', en:'Enter quantities', zh:'请输入数量' },
+    qty:        { ja:'数量',        en:'Qty',           zh:'数量' },
+    unit:       { ja:'単位',        en:'Unit',          zh:'单位' },
+    item:       { ja:'品目',        en:'Item',          zh:'品目' },
+    cutoff:     { ja:'締切',        en:'Cutoff',        zh:'截止' },
+    deliv:      { ja:'納品',        en:'Delivery',      zh:'配送' },
+  };
+  const l = k => L[k]?.[lang] || L[k]?.ja || k;
+
+  return (
+    <div style={{ paddingBottom:80 }}>
+      {/* サブタブ */}
+      <div style={{ display:'flex', gap:4, marginBottom:16, background:'var(--bg-2)', padding:4, borderRadius:10 }}>
+        {['new','history'].map(tt => (
+          <button key={tt} onClick={() => setOrderSubTab(tt)}
+            style={{
+              flex:1, padding:'8px 0', fontSize:13, border:'none', borderRadius:8, cursor:'pointer',
+              background: orderSubTab===tt ? 'var(--bg)' : 'transparent',
+              color: orderSubTab===tt ? 'var(--text-1)' : 'var(--text-2)',
+              fontWeight: orderSubTab===tt ? 600 : 400,
+              boxShadow: orderSubTab===tt ? '0 1px 4px rgba(0,0,0,0.08)' : 'none',
+            }}>
+            {tt==='new' ? l('newOrder') : l('history')}
+          </button>
+        ))}
+      </div>
+
+      {/* 新規発注 */}
+      {orderSubTab === 'new' && (
+        <>
+          {/* Step: form */}
+          {step === 'form' && (
+            <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
+              {/* 業者選択 */}
+              <div>
+                <div style={{ fontSize:12, color:'var(--text-2)', marginBottom:6 }}>{l('vendor')}</div>
+                <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+                  {vendors.map(v => {
+                    const vm = VENDOR_MASTER[v];
+                    const selected = vendor === v;
+                    return (
+                      <button key={v} onClick={() => { setVendor(v); setQuantities({}); }}
+                        style={{
+                          padding:'12px 14px', borderRadius:10, border: selected ? '2px solid #D85A30' : '1px solid var(--border)',
+                          background: selected ? 'rgba(216,90,48,0.06)' : 'var(--bg-2)',
+                          cursor:'pointer', textAlign:'left',
+                        }}>
+                        <div style={{ fontWeight:600, fontSize:14, color: selected ? '#D85A30' : 'var(--text-1)' }}>{v}</div>
+                        <div style={{ fontSize:11, color:'var(--text-2)', marginTop:3 }}>
+                          {l('deliv')}: {vm.days}　{l('cutoff')}: {vm.cutoff}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {vendor && (
+                <>
+                  {/* 日付・担当者 */}
+                  <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+                    {[
+                      { label:l('orderDate'), val:orderDate, set:setOrderDate, type:'date' },
+                      { label:l('delivDate'), val:deliveryDate, set:setDelivDate, type:'date' },
+                    ].map(({label,val,set,type}) => (
+                      <div key={label}>
+                        <div style={{ fontSize:12, color:'var(--text-2)', marginBottom:4 }}>{label}</div>
+                        <input type={type} value={val} onChange={e=>set(e.target.value)}
+                          style={{ width:'100%', padding:'8px 10px', borderRadius:8, border:'1px solid var(--border)', background:'var(--bg)', color:'var(--text-1)', fontSize:13 }} />
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+                    <div>
+                      <div style={{ fontSize:12, color:'var(--text-2)', marginBottom:4 }}>{l('person')}</div>
+                      <input value={person} onChange={e=>setPerson(e.target.value)} placeholder="Kevin"
+                        style={{ width:'100%', padding:'8px 10px', borderRadius:8, border:'1px solid var(--border)', background:'var(--bg)', color:'var(--text-1)', fontSize:13 }} />
+                    </div>
+                    <div>
+                      <div style={{ fontSize:12, color:'var(--text-2)', marginBottom:4 }}>{l('memo')}</div>
+                      <input value={memo} onChange={e=>setMemo(e.target.value)}
+                        style={{ width:'100%', padding:'8px 10px', borderRadius:8, border:'1px solid var(--border)', background:'var(--bg)', color:'var(--text-1)', fontSize:13 }} />
+                    </div>
+                  </div>
+
+                  {/* 品目リスト */}
+                  <div>
+                    <div style={{ fontSize:12, color:'var(--text-2)', marginBottom:8 }}>品目・数量入力</div>
+                    <div style={{ border:'1px solid var(--border)', borderRadius:10, overflow:'hidden' }}>
+                      <div style={{ display:'grid', gridTemplateColumns:'1fr 60px 90px', background:'var(--bg-2)', padding:'8px 12px', fontSize:12, color:'var(--text-2)', fontWeight:500 }}>
+                        <span>{l('item')}</span><span style={{textAlign:'center'}}>{l('unit')}</span><span style={{textAlign:'center'}}>{l('qty')}</span>
+                      </div>
+                      {vendorItems.map((it, i) => (
+                        <div key={it.name} style={{ display:'grid', gridTemplateColumns:'1fr 60px 90px', padding:'7px 12px', borderTop:'1px solid var(--border)', background: i%2===0?'var(--bg)':'var(--bg-2)', alignItems:'center' }}>
+                          <span style={{ fontSize:13, color:'var(--text-1)' }}>{it.name}</span>
+                          <span style={{ fontSize:12, color:'var(--text-2)', textAlign:'center' }}>{it.unit}</span>
+                          <input
+                            type="number" min="0"
+                            value={quantities[it.name] || ''}
+                            onChange={e => updateQty(it.name, e.target.value)}
+                            placeholder="0"
+                            style={{ width:'100%', padding:'5px 8px', borderRadius:6, border:'1px solid var(--border)', background:'var(--bg)', color:'var(--text-1)', fontSize:13, textAlign:'center' }}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => { if(orderedItems.length===0){showToast(l('noItems'));return;} setStep('confirm'); }}
+                    style={{ width:'100%', padding:'14px 0', borderRadius:12, border:'none', background:'#D85A30', color:'white', fontSize:15, fontWeight:600, cursor:'pointer', marginTop:4 }}>
+                    {l('next')} ({orderedItems.length}品目)
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* Step: confirm */}
+          {step === 'confirm' && (
+            <div>
+              <div style={{ background:'var(--bg-2)', borderRadius:12, padding:'14px 16px', marginBottom:16 }}>
+                <div style={{ fontWeight:700, fontSize:15, color:'var(--text-1)', marginBottom:10 }}>{vendor}</div>
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:6, fontSize:13, color:'var(--text-2)' }}>
+                  <div>{l('orderDate')}: <strong style={{color:'var(--text-1)'}}>{orderDate}</strong></div>
+                  {deliveryDate && <div>{l('delivDate')}: <strong style={{color:'var(--text-1)'}}>{deliveryDate}</strong></div>}
+                  {person && <div>{l('person')}: <strong style={{color:'var(--text-1)'}}>{person}</strong></div>}
+                  {memo && <div>{l('memo')}: <strong style={{color:'var(--text-1)'}}>{memo}</strong></div>}
+                </div>
+              </div>
+
+              <div style={{ border:'1px solid var(--border)', borderRadius:10, overflow:'hidden', marginBottom:16 }}>
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 60px 70px', background:'var(--bg-2)', padding:'8px 12px', fontSize:12, color:'var(--text-2)', fontWeight:500 }}>
+                  <span>{l('item')}</span><span style={{textAlign:'center'}}>{l('unit')}</span><span style={{textAlign:'center'}}>{l('qty')}</span>
+                </div>
+                {orderedItems.map((it, i) => (
+                  <div key={it.name} style={{ display:'grid', gridTemplateColumns:'1fr 60px 70px', padding:'8px 12px', borderTop:'1px solid var(--border)', background: i%2===0?'var(--bg)':'var(--bg-2)' }}>
+                    <span style={{ fontSize:13, color:'var(--text-1)' }}>{it.name}</span>
+                    <span style={{ fontSize:12, color:'var(--text-2)', textAlign:'center' }}>{it.unit}</span>
+                    <span style={{ fontSize:13, fontWeight:600, color:'#D85A30', textAlign:'center' }}>{quantities[it.name]}</span>
+                  </div>
+                ))}
+              </div>
+
+              <div style={{ fontSize:12, color:'var(--text-2)', marginBottom:12, padding:'10px 14px', background:'rgba(216,90,48,0.06)', borderRadius:8, border:'1px solid rgba(216,90,48,0.2)' }}>
+                📧 送信先: {VENDOR_MASTER[vendor]?.email}
+              </div>
+
+              <div style={{ display:'flex', gap:10 }}>
+                <button onClick={() => setStep('form')}
+                  style={{ flex:1, padding:'13px 0', borderRadius:12, border:'1px solid var(--border)', background:'transparent', color:'var(--text-2)', fontSize:14, cursor:'pointer' }}>
+                  {l('back')}
+                </button>
+                <button onClick={sendOrder} disabled={sending}
+                  style={{ flex:2, padding:'13px 0', borderRadius:12, border:'none', background: sending?'var(--bg-2)':'#D85A30', color: sending?'var(--text-2)':'white', fontSize:14, fontWeight:600, cursor: sending?'not-allowed':'pointer' }}>
+                  {sending ? l('sending') : l('send')}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Step: sent */}
+          {step === 'sent' && (
+            <div style={{ textAlign:'center', padding:'40px 0' }}>
+              <div style={{ fontSize:48, marginBottom:12 }}>✅</div>
+              <div style={{ fontSize:16, fontWeight:600, color:'var(--text-1)', marginBottom:8 }}>発注完了</div>
+              <div style={{ fontSize:13, color:'var(--text-2)', marginBottom:24 }}>Gmailが開きました。送信を確認してください。</div>
+              <button onClick={resetForm}
+                style={{ padding:'12px 32px', borderRadius:10, border:'none', background:'#D85A30', color:'white', fontSize:14, fontWeight:600, cursor:'pointer' }}>
+                {l('newAnother')}
+              </button>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* 発注履歴 */}
+      {orderSubTab === 'history' && (
+        <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+          {orders.length === 0 ? (
+            <div style={{ textAlign:'center', padding:'40px 0', color:'var(--text-2)', fontSize:14 }}>発注履歴なし</div>
+          ) : orders.map(order => (
+            <div key={order.id} style={{ background:'var(--bg-2)', borderRadius:12, overflow:'hidden', border:'1px solid var(--border)' }}>
+              <div style={{ padding:'10px 14px', background:'var(--bg)', borderBottom:'1px solid var(--border)', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                <div>
+                  <span style={{ fontWeight:600, fontSize:14, color:'var(--text-1)' }}>{order.vendor}</span>
+                  <span style={{ fontSize:11, color:'var(--text-2)', marginLeft:8, background:'var(--bg-2)', padding:'2px 7px', borderRadius:6, border:'1px solid var(--border)' }}>{order.po_number}</span>
+                </div>
+                <span style={{ fontSize:12, color:'var(--text-2)' }}>{order.order_date?.slice(0,10)}</span>
+              </div>
+              <div style={{ padding:'8px 14px' }}>
+                {(order.items||[]).filter(it=>it.item_name).map(it => (
+                  <div key={it.id} style={{ display:'flex', justifyContent:'space-between', fontSize:13, padding:'4px 0', borderBottom:'1px solid var(--border)' }}>
+                    <span style={{ color:'var(--text-1)' }}>{it.item_name}</span>
+                    <span style={{ color:'var(--text-2)' }}>{it.quantity} {it.unit}</span>
+                  </div>
+                ))}
+                {order.person && <div style={{ fontSize:11, color:'var(--text-2)', marginTop:6 }}>担当: {order.person}</div>}
+                {order.memo && <div style={{ fontSize:11, color:'var(--text-2)' }}>メモ: {order.memo}</div>}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function MonthlyTab({ history, lang, l }) {
   const months = [...new Set(history.map(h => (h.delivered_date || '').slice(0,7)))].filter(Boolean).sort().reverse();

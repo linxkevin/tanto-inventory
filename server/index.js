@@ -114,6 +114,32 @@ async function initDB() {
       ALTER TABLE deliveries ADD COLUMN IF NOT EXISTS invoice_no TEXT DEFAULT '';
     EXCEPTION WHEN others THEN NULL;
     END $$;
+
+    CREATE TABLE IF NOT EXISTS orders (
+      id            SERIAL PRIMARY KEY,
+      po_number     TEXT NOT NULL UNIQUE,
+      vendor        TEXT NOT NULL,
+      order_date    DATE NOT NULL DEFAULT CURRENT_DATE,
+      delivery_date DATE,
+      person        TEXT DEFAULT '',
+      memo          TEXT DEFAULT '',
+      status        TEXT NOT NULL DEFAULT 'sent',
+      created_at    TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS order_items (
+      id         SERIAL PRIMARY KEY,
+      order_id   INTEGER REFERENCES orders(id) ON DELETE CASCADE,
+      item_name  TEXT NOT NULL,
+      unit       TEXT NOT NULL DEFAULT '',
+      quantity   NUMERIC(10,2) NOT NULL,
+      note       TEXT DEFAULT ''
+    );
+
+    DO $$ BEGIN
+      ALTER TABLE orders ADD COLUMN IF NOT EXISTS po_number TEXT;
+    EXCEPTION WHEN others THEN NULL;
+    END $$;
     DO $$ BEGIN
       ALTER TABLE deliveries ADD COLUMN IF NOT EXISTS subtotal NUMERIC(10,2) DEFAULT 0;
     EXCEPTION WHEN others THEN NULL;
@@ -736,6 +762,82 @@ app.post('/api/analyze-receipt', async (req, res) => {
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
+});
+
+
+// ── Orders API ────────────────────────────────────────
+
+// PO番号自動採番
+async function generatePONumber() {
+  const now = new Date();
+  const ym = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}`;
+  const { rows } = await pool.query(
+    `SELECT po_number FROM orders WHERE po_number LIKE $1 ORDER BY po_number DESC LIMIT 1`,
+    [`ALAMOANA-${ym}-%`]
+  );
+  const seq = rows.length > 0
+    ? String(parseInt(rows[0].po_number.split('-')[2]) + 1).padStart(4, '0')
+    : '0001';
+  return `ALAMOANA-${ym}-${seq}`;
+}
+
+// GET /api/orders
+app.get('/api/orders', async (req, res) => {
+  try {
+    const { vendor, from, to } = req.query;
+    let sql = `SELECT o.*, json_agg(json_build_object('id',oi.id,'item_name',oi.item_name,'unit',oi.unit,'quantity',oi.quantity,'note',oi.note) ORDER BY oi.id) as items
+               FROM orders o LEFT JOIN order_items oi ON oi.order_id=o.id`;
+    const conds = [], params = [];
+    if (vendor) { params.push(vendor); conds.push(`o.vendor=$${params.length}`); }
+    if (from)   { params.push(from);   conds.push(`o.order_date>=$${params.length}`); }
+    if (to)     { params.push(to);     conds.push(`o.order_date<=$${params.length}`); }
+    if (conds.length) sql += ' WHERE ' + conds.join(' AND ');
+    sql += ' GROUP BY o.id ORDER BY o.created_at DESC LIMIT 100';
+    const { rows } = await pool.query(sql, params);
+    res.json(rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /api/orders/:id
+app.get('/api/orders/:id', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT o.*, json_agg(json_build_object('id',oi.id,'item_name',oi.item_name,'unit',oi.unit,'quantity',oi.quantity,'note',oi.note) ORDER BY oi.id) as items
+       FROM orders o LEFT JOIN order_items oi ON oi.order_id=o.id WHERE o.id=$1 GROUP BY o.id`,
+      [req.params.id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'not found' });
+    res.json(rows[0]);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/orders
+app.post('/api/orders', async (req, res) => {
+  try {
+    const { vendor, order_date, delivery_date, person, memo, items } = req.body;
+    const po_number = await generatePONumber();
+    const { rows } = await pool.query(
+      `INSERT INTO orders (po_number, vendor, order_date, delivery_date, person, memo, status)
+       VALUES ($1,$2,$3,$4,$5,$6,'sent') RETURNING *`,
+      [po_number, vendor, order_date, delivery_date||null, person||'', memo||'']
+    );
+    const order = rows[0];
+    for (const it of (items||[])) {
+      await pool.query(
+        `INSERT INTO order_items (order_id, item_name, unit, quantity, note) VALUES ($1,$2,$3,$4,$5)`,
+        [order.id, it.item_name, it.unit||'', it.quantity, it.note||'']
+      );
+    }
+    res.json(order);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// DELETE /api/orders/:id
+app.delete('/api/orders/:id', async (req, res) => {
+  try {
+    await pool.query('DELETE FROM orders WHERE id=$1', [req.params.id]);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // ── Deliveries API ────────────────────────────────────
