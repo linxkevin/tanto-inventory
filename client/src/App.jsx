@@ -2688,7 +2688,7 @@ function OrderTab({ lang, t, items, showToast }) {
               </div>
 
               <div style={{ fontSize:12, color:'var(--text-2)', marginBottom:12, padding:'10px 14px', background:'rgba(216,90,48,0.06)', borderRadius:8, border:'1px solid rgba(216,90,48,0.2)' }}>
-                📧 送信先: {VENDOR_MASTER[vendor]?.email}
+                📧 送信先: {TEST_MODE ? `[TEST] ${TEST_EMAIL}` : VENDOR_MASTER[vendor]?.email}
               </div>
 
               <div style={{ display:'flex', gap:10 }}>
