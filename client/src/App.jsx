@@ -1799,7 +1799,7 @@ function AdminArea({ lang, t, items, sessions, location, activeTab, setActiveTab
 
       {/* Sub-tab content */}
       {currentTab === 'order' && (
-        <OrderTab lang={lang} t={t} items={items} showToast={showToast} />
+        <OrderTab lang={lang} t={t} items={items} showToast={showToast} location={location} />
       )}
 
       {currentTab === 'admin' && (
@@ -2445,7 +2445,7 @@ const VENDOR_ITEMS = {
   ],
 };
 
-function OrderTab({ lang, t, items, showToast }) {
+function OrderTab({ lang, t, items, showToast, location }) {
   const today = new Date().toISOString().slice(0,10);
   const [step, setStep]             = useState('form'); // form | confirm | sent
   const [vendor, setVendor]         = useState('');
@@ -2501,21 +2501,26 @@ function OrderTab({ lang, t, items, showToast }) {
 
       // Gmail送信
       const vm = VENDOR_MASTER[vendor];
-      const subject = `TANTO Order - ${vendor} - ${orderDate}`;
-      const itemLines = orderedItems.map(it =>
-        `${it.name} / ${it.unit} / Qty: ${quantities[it.name]}`
-      ).join('\n');
+      const subject = `TANTO Order [${location}] - ${vendor} - ${orderDate}`;
+      const colW = 28;
+      const pad = (s, w) => String(s).padEnd(w);
+      const itemLines = [
+        pad('品目 / Item', colW) + pad('単位 / Unit', 12) + '数量 / Qty',
+        '─'.repeat(colW + 12 + 10),
+        ...orderedItems.map(it =>
+          pad(it.name, colW) + pad(it.unit, 12) + quantities[it.name]
+        )
+      ].join('\n');
       let body = `TANTO Gyoza & Ramen Bar - Purchase Order\n`;
+      body += `Store: ${location}\n`;
       body += `PO#: ${order.po_number}\n`;
       body += `Order Date: ${orderDate}\n`;
       if (deliveryDate) body += `Delivery Date: ${deliveryDate}\n`;
-      if (person) body += `Person: ${person}\n`;
+      if (person) body += `Person In Charge: ${person}\n`;
       if (memo) body += `Memo: ${memo}\n`;
-      body += `\n${'='.repeat(30)}\n\n`;
-      body += `Item / Unit / Qty\n`;
-      body += `${'─'.repeat(30)}\n`;
+      body += `\n${'='.repeat(50)}\n\n`;
       body += itemLines;
-      body += `\n\n${'='.repeat(30)}\nThank you,\nTanto Gyoza & Ramen Bar\n1232 Waimanu St STE105\nHonolulu, HI 96814\nTel: 808-888-0292`;
+      body += `\n\n${'='.repeat(50)}\nThank you,\nTanto Gyoza & Ramen Bar\n1232 Waimanu St STE105, Honolulu, HI 96814\nTel: 808-888-0292`;
 
       const toEmail = TEST_MODE ? TEST_EMAIL : vm.email;
       const ccEmail = TEST_MODE ? '' : vm.cc;
