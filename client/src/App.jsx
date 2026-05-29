@@ -2359,6 +2359,10 @@ function fileToBase64Resized(file, maxWidth = 1600, quality = 0.85) {
 
 
 // ── OrderTab ──────────────────────────────────────────
+// ── テストモード（6月1日以降はfalseに変更）──
+const TEST_MODE = true;
+const TEST_EMAIL = 'sales@tanto-otabe.com';
+
 const VENDOR_MASTER = {
   'JFC International INC.': {
     email: 'Wnakai@jfc.com',
@@ -2510,7 +2514,10 @@ function OrderTab({ lang, t, items, showToast }) {
       });
       body += `\n${'─'.repeat(30)}\n以上、よろしくお願いいたします。\nTanto Gyoza & Ramen Bar`;
 
-      const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(vm.email)}&cc=${encodeURIComponent(vm.cc)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+      const toEmail = TEST_MODE ? TEST_EMAIL : vm.email;
+      const ccEmail = TEST_MODE ? '' : vm.cc;
+      const finalSubject = TEST_MODE ? `[TEST] ${subject}` : subject;
+      const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(toEmail)}&cc=${encodeURIComponent(ccEmail)}&su=${encodeURIComponent(finalSubject)}&body=${encodeURIComponent(body)}`;
       window.open(gmailUrl, '_blank');
 
       showToast(`✅ ${order.po_number} を保存しました`);
