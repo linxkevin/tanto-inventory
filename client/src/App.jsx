@@ -2870,7 +2870,12 @@ function OrderHistory({ orders, lang }) {
                 </div>
               </div>
               <div style={{ padding:'8px 14px' }}>
-                {(order.items||[]).filter(it=>it.item_name).map((it,i) => (
+                {(order.items||[]).filter(it=>it.item_name).sort((a,b) => {
+                    const vItems = VENDOR_ITEMS[order.vendor] || [];
+                    const ai = vItems.findIndex(v=>v.name===a.item_name);
+                    const bi = vItems.findIndex(v=>v.name===b.item_name);
+                    return (ai===-1?999:ai) - (bi===-1?999:bi);
+                  }).map((it,i) => (
                   <div key={i} style={{ display:'grid', gridTemplateColumns:'1fr 60px 60px', fontSize:13, padding:'5px 0', borderBottom:'1px solid var(--border)' }}>
                     <span style={{ color:'var(--text-1)' }}>{it.item_name}</span>
                     <span style={{ color:'var(--text-2)', textAlign:'center' }}>{it.unit}</span>
