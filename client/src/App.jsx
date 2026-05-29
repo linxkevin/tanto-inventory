@@ -132,7 +132,7 @@ export default function App() {
         <ReceiptTab lang={lang} showToast={showToast} />
       )}
 
-      {location && ['admin','history','settings'].includes(tab) && (
+      {location && ['admin','history','settings','order'].includes(tab) && (
         adminUnlocked
           ? <AdminArea
               lang={lang} t={t} items={items} sessions={sessions}
