@@ -2921,6 +2921,14 @@ function SummaryView({ orders }) {
           });
         });
 
+        // VENDOR_ITEMSの順番に並び替え
+        const vItemOrder = (VENDOR_ITEMS[vendor] || []).map(v => v.name);
+        const sortedItems = Object.values(allItems).sort((a,b) => {
+          const ai = vItemOrder.indexOf(a.name);
+          const bi = vItemOrder.indexOf(b.name);
+          return (ai===-1?999:ai) - (bi===-1?999:bi);
+        });
+
         return (
           <div key={vendor} style={{ borderRadius:12, overflow:'hidden', border:'1px solid var(--border)' }}>
             <div style={{ padding:'10px 14px', background:'#2C3E50', color:'white', fontWeight:600, fontSize:14 }}>
@@ -2941,7 +2949,7 @@ function SummaryView({ orders }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {Object.values(allItems).map((item, i) => {
+                  {sortedItems.map((item, i) => {
                     const total = allDates.reduce((s,d) => s + (item.dates[d]||0), 0);
                     return (
                       <tr key={i} style={{ background: i%2===0 ? 'var(--bg)' : 'var(--bg-2)' }}>
