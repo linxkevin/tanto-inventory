@@ -2502,17 +2502,20 @@ function OrderTab({ lang, t, items, showToast }) {
       // Gmail送信
       const vm = VENDOR_MASTER[vendor];
       const subject = `TANTO Order - ${vendor} - ${orderDate}`;
-      let body = `TANTO Gyoza & Ramen Bar\n発注日: ${orderDate}\n`;
-      if (deliveryDate) body += `納品希望日: ${deliveryDate}\n`;
-      if (person) body += `担当: ${person}\n`;
-      if (memo) body += `\nメモ: ${memo}\n`;
-      body += `\nPO番号: ${order.po_number}\n`;
-      body += `${'─'.repeat(30)}\n\n`;
-      body += `品目\t単位\t数量\n`;
-      orderedItems.forEach(it => {
-        body += `${it.name}\t${it.unit}\t${quantities[it.name]}\n`;
-      });
-      body += `\n${'─'.repeat(30)}\n以上、よろしくお願いいたします。\nTanto Gyoza & Ramen Bar`;
+      const itemLines = orderedItems.map(it =>
+        `${it.name} / ${it.unit} / Qty: ${quantities[it.name]}`
+      ).join('\n');
+      let body = `TANTO Gyoza & Ramen Bar - Purchase Order\n`;
+      body += `PO#: ${order.po_number}\n`;
+      body += `Order Date: ${orderDate}\n`;
+      if (deliveryDate) body += `Delivery Date: ${deliveryDate}\n`;
+      if (person) body += `Person: ${person}\n`;
+      if (memo) body += `Memo: ${memo}\n`;
+      body += `\n${'='.repeat(30)}\n\n`;
+      body += `Item / Unit / Qty\n`;
+      body += `${'─'.repeat(30)}\n`;
+      body += itemLines;
+      body += `\n\n${'='.repeat(30)}\nThank you,\nTanto Gyoza & Ramen Bar\n1232 Waimanu St STE105\nHonolulu, HI 96814\nTel: 808-888-0292`;
 
       const toEmail = TEST_MODE ? TEST_EMAIL : vm.email;
       const ccEmail = TEST_MODE ? '' : vm.cc;
