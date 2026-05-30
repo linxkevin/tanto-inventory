@@ -3084,11 +3084,14 @@ function DeliveryHistory({ history, deleteItem, deleteGroup }) {
 
   const months = [...new Set(history.map(h => (h.delivered_date||'').slice(0,7)))].filter(Boolean).sort().reverse();
   const vendors = [...new Set(history.map(h => h.vendor))].filter(Boolean).sort();
+  const locations = [...new Set(history.map(h => h.location).filter(Boolean))].sort();
+  const [selectedLocation, setSelectedLocation] = useState('');
 
   const filtered = history.filter(h => {
     const matchMonth = !selectedMonth || (h.delivered_date||'').startsWith(selectedMonth);
     const matchVendor = !selectedVendor || h.vendor === selectedVendor;
-    return matchMonth && matchVendor;
+    const matchLocation = !selectedLocation || h.location === selectedLocation;
+    return matchMonth && matchVendor && matchLocation;
   });
 
   const formatMonth = (m) => {
@@ -3180,6 +3183,24 @@ function DeliveryHistory({ history, deleteItem, deleteGroup }) {
         ))}
       </div>
 
+      {/* 店舗選択 */}
+      {locations.length > 1 && (
+        <div style={{ display:'flex', gap:6, overflowX:'auto', paddingBottom:4, marginBottom:8 }}>
+          <button onClick={() => setSelectedLocation('')}
+            style={{ padding:'5px 12px', borderRadius:20, border:'1px solid var(--border)', whiteSpace:'nowrap', fontSize:11, cursor:'pointer',
+              background: !selectedLocation ? '#D85A30' : 'var(--bg-2)', color: !selectedLocation ? 'white' : 'var(--text-2)' }}>
+            全店舗
+          </button>
+          {locations.map(loc => (
+            <button key={loc} onClick={() => setSelectedLocation(loc)}
+              style={{ padding:'5px 12px', borderRadius:20, border:'1px solid var(--border)', whiteSpace:'nowrap', fontSize:11, cursor:'pointer',
+                background: selectedLocation===loc ? '#D85A30' : 'var(--bg-2)', color: selectedLocation===loc ? 'white' : 'var(--text-2)' }}>
+              {loc}店
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* 業者選択 */}
       <div style={{ display:'flex', gap:6, overflowX:'auto', paddingBottom:4, marginBottom:10 }}>
         <button onClick={() => setSelectedVendor('')}
@@ -3236,6 +3257,11 @@ function DeliveryHistory({ history, deleteItem, deleteGroup }) {
                     {group.items[0]?.invoice_no && (
                       <span style={{ fontSize:11, color:'var(--text-2)', marginLeft:8, background:'var(--bg-2)', padding:'2px 7px', borderRadius:6, border:'1px solid var(--border)' }}>
                         # {group.items[0].invoice_no}
+                      </span>
+                    )}
+                    {group.items[0]?.location && (
+                      <span style={{ fontSize:11, color:'white', marginLeft:6, background:'#D85A30', padding:'2px 7px', borderRadius:6 }}>
+                        {group.items[0].location}店
                       </span>
                     )}
                   </div>
