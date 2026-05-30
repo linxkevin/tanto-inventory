@@ -783,7 +783,10 @@ app.post('/api/analyze-receipt', async (req, res) => {
 app.post('/api/orders/:id/send', async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT o.*, json_agg(json_build_object('item_name',oi.item_name,'unit',oi.unit,'quantity',oi.quantity,'note',oi.note) ORDER BY oi.id) as items
+      `SELECT o.*, 
+       TO_CHAR(o.order_date, 'YYYY-MM-DD') as order_date,
+       TO_CHAR(o.delivery_date, 'YYYY-MM-DD') as delivery_date,
+       json_agg(json_build_object('item_name',oi.item_name,'unit',oi.unit,'quantity',oi.quantity,'note',oi.note) ORDER BY oi.id) as items
        FROM orders o LEFT JOIN order_items oi ON oi.order_id=o.id WHERE o.id=$1 GROUP BY o.id`,
       [req.params.id]
     );
