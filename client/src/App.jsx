@@ -2437,6 +2437,7 @@ function OrderTab({ lang, t, items, showToast, location }) {
     try {
       const payload = {
         vendor,
+        location: location || 'Piikoi',
         order_date: orderDate,
         delivery_date: deliveryDate || null,
         person,

@@ -122,6 +122,7 @@ async function initDB() {
       id            SERIAL PRIMARY KEY,
       po_number     TEXT NOT NULL UNIQUE,
       vendor        TEXT NOT NULL,
+      location      TEXT NOT NULL DEFAULT 'Piikoi',
       order_date    DATE NOT NULL DEFAULT CURRENT_DATE,
       delivery_date DATE,
       person        TEXT DEFAULT '',
@@ -129,6 +130,10 @@ async function initDB() {
       status        TEXT NOT NULL DEFAULT 'sent',
       created_at    TIMESTAMPTZ DEFAULT NOW()
     );
+    DO $$ BEGIN
+      ALTER TABLE orders ADD COLUMN IF NOT EXISTS location TEXT NOT NULL DEFAULT 'Piikoi';
+    EXCEPTION WHEN others THEN NULL;
+    END $$;
 
     CREATE TABLE IF NOT EXISTS order_items (
       id         SERIAL PRIMARY KEY,
@@ -971,12 +976,12 @@ app.get('/api/orders/:id', async (req, res) => {
 // POST /api/orders
 app.post('/api/orders', async (req, res) => {
   try {
-    const { vendor, order_date, delivery_date, person, memo, items } = req.body;
+    const { vendor, order_date, delivery_date, person, memo, items, location } = req.body;
     const po_number = await generatePONumber();
     const { rows } = await pool.query(
-      `INSERT INTO orders (po_number, vendor, order_date, delivery_date, person, memo, status)
-       VALUES ($1,$2,$3,$4,$5,$6,'sent') RETURNING *`,
-      [po_number, vendor, order_date, delivery_date||null, person||'', memo||'']
+      `INSERT INTO orders (po_number, vendor, location, order_date, delivery_date, person, memo, status)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,'sent') RETURNING *`,
+      [po_number, vendor, location||'Piikoi', order_date, delivery_date||null, person||'', memo||'']
     );
     const order = rows[0];
     for (const it of (items||[])) {
