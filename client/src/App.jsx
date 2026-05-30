@@ -2262,56 +2262,7 @@ function ReceiptTab({ lang, t, showToast }) {
 
       {/* ── 履歴タブ ── */}
       {historyTab === 'history' && (
-        <div>
-          {history.length === 0 ? (
-            <div style={{ textAlign:'center', padding:'40px 0', color:'var(--text-2)', fontSize:14 }}>{l('noHistory')}</div>
-          ) : (
-            <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-              {groupByVendorDate(history).map(group => (
-                <div key={group.key} style={{ background:'var(--bg-2)', borderRadius:12, overflow:'hidden', border:'1px solid var(--border)' }}>
-                  <div style={{ padding:'10px 14px', background:'var(--bg)', borderBottom:'1px solid var(--border)', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-                    <div>
-                      <span style={{ fontWeight:600, fontSize:14, color:'var(--text-1)' }}>{group.vendor}</span>
-                      <span style={{ fontSize:12, color:'var(--text-2)', marginLeft:10 }}>{group.date} · {group.items.length}品目</span>
-                      {group.items[0]?.invoice_no && (
-                        <span style={{ fontSize:11, color:'var(--text-2)', marginLeft:8, background:'var(--bg-2)', padding:'2px 7px', borderRadius:6, border:'1px solid var(--border)' }}>
-                          # {group.items[0].invoice_no}
-                        </span>
-                      )}
-                    </div>
-                    <button onClick={() => deleteGroup(group.items.map(i => i.id))}
-                      style={{ padding:'4px 10px', fontSize:11, border:'1px solid #e55', borderRadius:6, background:'transparent', color:'#e55', cursor:'pointer', whiteSpace:'nowrap' }}>
-                      グループ削除
-                    </button>
-                  </div>
-                  <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12 }}>
-                    <tbody>
-                      {group.items.map(it => (
-                        <tr key={it.id} style={{ borderBottom:'1px solid var(--border)' }}>
-                          <td style={{ padding:'8px 14px', color:'var(--text-1)' }}>{it.item_name}{it.item_code ? <span style={{ color:'var(--text-2)', marginLeft:6 }}>#{it.item_code}</span> : ''}</td>
-                          <td style={{ padding:'8px 14px', color:'var(--text-2)', textAlign:'right', whiteSpace:'nowrap' }}>
-                            {it.unit_price != null ? `$${parseFloat(it.unit_price).toFixed(2)}` : '—'} × {it.quantity != null ? it.quantity : '—'}
-                          </td>
-                          <td style={{ padding:'8px 14px', fontWeight:600, color:'var(--text-1)', textAlign:'right', whiteSpace:'nowrap' }}>
-                            {it.unit_price != null && it.quantity != null
-                              ? `$${(parseFloat(it.unit_price) * parseFloat(it.quantity)).toFixed(2)}`
-                              : '—'}
-                          </td>
-                          <td style={{ padding:'8px 6px', textAlign:'right' }}>
-                            <button onClick={() => deleteItem(it.id)}
-                              style={{ padding:'3px 8px', fontSize:11, border:'1px solid #e55', borderRadius:6, background:'transparent', color:'#e55', cursor:'pointer' }}>
-                              削除
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+        <DeliveryHistory history={history} deleteItem={deleteItem} deleteGroup={deleteGroup} />
       )}
     </div>
   );
@@ -3112,6 +3063,289 @@ function MonthlyTab({ history, lang, l }) {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+
+function DeliveryHistory({ history, deleteItem, deleteGroup }) {
+  const [selectedMonth, setSelectedMonth] = useState('');
+  const [selectedVendor, setSelectedVendor] = useState('');
+  const [viewMode, setViewMode] = useState('log'); // log | summary
+
+  const months = [...new Set(history.map(h => (h.delivered_date||'').slice(0,7)))].filter(Boolean).sort().reverse();
+  const vendors = [...new Set(history.map(h => h.vendor))].filter(Boolean).sort();
+
+  const filtered = history.filter(h => {
+    const matchMonth = !selectedMonth || (h.delivered_date||'').startsWith(selectedMonth);
+    const matchVendor = !selectedVendor || h.vendor === selectedVendor;
+    return matchMonth && matchVendor;
+  });
+
+  const formatMonth = (m) => {
+    if (!m) return '';
+    const [y, mo] = m.split('-');
+    return `${y}年${parseInt(mo)}月`;
+  };
+
+  // CSV出力（ログ型）
+  const exportLogCSV = () => {
+    if (filtered.length === 0) return;
+    const header = ['納品日', '業者', 'Invoice No.', '品目', '品番', '単価', '数量', '金額'];
+    const rows = filtered.map(it => [
+      (it.delivered_date||'').slice(0,10),
+      it.vendor || '',
+      it.invoice_no || '',
+      it.item_name || '',
+      it.item_code || '',
+      it.unit_price != null ? parseFloat(it.unit_price).toFixed(2) : '',
+      it.quantity != null ? it.quantity : '',
+      it.unit_price != null && it.quantity != null
+        ? (parseFloat(it.unit_price) * parseFloat(it.quantity)).toFixed(2) : '',
+    ]);
+    const csv = [header, ...rows].map(r => r.join(',')).join('\n');
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `tanto_delivery_log_${selectedMonth||'all'}_${selectedVendor||'all'}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // CSV出力（集計型：縦アイテム×横日付）
+  const exportSummaryCSV = () => {
+    if (filtered.length === 0) return;
+    const allDates = [...new Set(filtered.map(h => (h.delivered_date||'').slice(0,10)))].filter(Boolean).sort();
+    const allItems = {};
+    filtered.forEach(it => {
+      const date = (it.delivered_date||'').slice(0,10);
+      const key = `${it.vendor}__${it.item_name}`;
+      if (!allItems[key]) allItems[key] = { vendor: it.vendor, name: it.item_name, code: it.item_code||'', dates: {} };
+      allItems[key].dates[date] = (allItems[key].dates[date] || 0) + parseFloat(it.quantity || 0);
+    });
+
+    // VENDOR_ITEMSの順番でソート
+    const sortedItems = Object.values(allItems).sort((a, b) => {
+      const aVItems = VENDOR_ITEMS[a.vendor] || [];
+      const bVItems = VENDOR_ITEMS[b.vendor] || [];
+      const ai = aVItems.findIndex(v => v.name === a.name);
+      const bi = bVItems.findIndex(v => v.name === b.name);
+      if (a.vendor !== b.vendor) return a.vendor.localeCompare(b.vendor);
+      return (ai===-1?999:ai) - (bi===-1?999:bi);
+    });
+
+    const header = ['業者', '品目', '品番', ...allDates.map(d=>d.slice(5)), '合計'];
+    const rows = sortedItems.map(item => {
+      const qtys = allDates.map(d => item.dates[d] || '');
+      const total = allDates.reduce((s,d) => s + (item.dates[d]||0), 0);
+      return [item.vendor, item.name, item.code, ...qtys, total];
+    });
+    const csv = [header, ...rows].map(r => r.join(',')).join('\n');
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `tanto_delivery_summary_${selectedMonth||'all'}_${selectedVendor||'all'}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const groups = groupByVendorDate(filtered);
+
+  return (
+    <div>
+      {/* 月選択 */}
+      <div style={{ display:'flex', gap:6, overflowX:'auto', paddingBottom:4, marginBottom:8 }}>
+        <button onClick={() => setSelectedMonth('')}
+          style={{ padding:'6px 14px', borderRadius:20, border:'1px solid var(--border)', whiteSpace:'nowrap', fontSize:12, cursor:'pointer',
+            background: !selectedMonth ? '#D85A30' : 'var(--bg-2)', color: !selectedMonth ? 'white' : 'var(--text-2)' }}>
+          全期間
+        </button>
+        {months.map(m => (
+          <button key={m} onClick={() => setSelectedMonth(m)}
+            style={{ padding:'6px 14px', borderRadius:20, border:'1px solid var(--border)', whiteSpace:'nowrap', fontSize:12, cursor:'pointer',
+              background: selectedMonth===m ? '#D85A30' : 'var(--bg-2)', color: selectedMonth===m ? 'white' : 'var(--text-2)' }}>
+            {formatMonth(m)}
+          </button>
+        ))}
+      </div>
+
+      {/* 業者選択 */}
+      <div style={{ display:'flex', gap:6, overflowX:'auto', paddingBottom:4, marginBottom:10 }}>
+        <button onClick={() => setSelectedVendor('')}
+          style={{ padding:'5px 12px', borderRadius:20, border:'1px solid var(--border)', whiteSpace:'nowrap', fontSize:11, cursor:'pointer',
+            background: !selectedVendor ? '#2C3E50' : 'var(--bg-2)', color: !selectedVendor ? 'white' : 'var(--text-2)' }}>
+          全業者
+        </button>
+        {vendors.map(v => (
+          <button key={v} onClick={() => setSelectedVendor(v)}
+            style={{ padding:'5px 12px', borderRadius:20, border:'1px solid var(--border)', whiteSpace:'nowrap', fontSize:11, cursor:'pointer',
+              background: selectedVendor===v ? '#2C3E50' : 'var(--bg-2)', color: selectedVendor===v ? 'white' : 'var(--text-2)' }}>
+            {v.split(' ')[0]}
+          </button>
+        ))}
+      </div>
+
+      {/* 表示切替 + CSV出力 */}
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12 }}>
+        <div style={{ display:'flex', gap:4, background:'var(--bg-2)', padding:3, borderRadius:8 }}>
+          {[{key:'log',label:'ログ'},{key:'summary',label:'集計'}].map(v => (
+            <button key={v.key} onClick={() => setViewMode(v.key)}
+              style={{ padding:'5px 14px', borderRadius:6, border:'none', fontSize:12, cursor:'pointer',
+                background: viewMode===v.key ? 'var(--bg)' : 'transparent',
+                color: viewMode===v.key ? 'var(--text-1)' : 'var(--text-2)',
+                fontWeight: viewMode===v.key ? 600 : 400 }}>
+              {v.label}
+            </button>
+          ))}
+        </div>
+        <button onClick={viewMode==='log' ? exportLogCSV : exportSummaryCSV}
+          style={{ padding:'7px 14px', borderRadius:8, border:'1px solid var(--border)', background:'var(--bg)', fontSize:12, cursor:'pointer', color:'var(--text-1)', display:'flex', alignItems:'center', gap:6 }}>
+          📥 CSV出力
+        </button>
+      </div>
+
+      {filtered.length === 0 ? (
+        <div style={{ textAlign:'center', padding:'40px 0', color:'var(--text-2)', fontSize:14 }}>履歴なし</div>
+      ) : viewMode === 'log' ? (
+        /* ── ログ表示 ── */
+        <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+          {groups.map(group => {
+            const vItems = VENDOR_ITEMS[group.vendor] || [];
+            const sortedItems = [...group.items].sort((a,b) => {
+              const ai = vItems.findIndex(v=>v.name===a.item_name);
+              const bi = vItems.findIndex(v=>v.name===b.item_name);
+              return (ai===-1?999:ai) - (bi===-1?999:bi);
+            });
+            return (
+              <div key={group.key} style={{ background:'var(--bg-2)', borderRadius:12, overflow:'hidden', border:'1px solid var(--border)' }}>
+                <div style={{ padding:'10px 14px', background:'var(--bg)', borderBottom:'1px solid var(--border)', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                  <div>
+                    <span style={{ fontWeight:600, fontSize:14, color:'var(--text-1)' }}>{group.vendor}</span>
+                    <span style={{ fontSize:12, color:'var(--text-2)', marginLeft:10 }}>{group.date} · {group.items.length}品目</span>
+                    {group.items[0]?.invoice_no && (
+                      <span style={{ fontSize:11, color:'var(--text-2)', marginLeft:8, background:'var(--bg-2)', padding:'2px 7px', borderRadius:6, border:'1px solid var(--border)' }}>
+                        # {group.items[0].invoice_no}
+                      </span>
+                    )}
+                  </div>
+                  <button onClick={() => deleteGroup(group.items.map(i => i.id))}
+                    style={{ padding:'4px 10px', fontSize:11, border:'1px solid #e55', borderRadius:6, background:'transparent', color:'#e55', cursor:'pointer', whiteSpace:'nowrap' }}>
+                    グループ削除
+                  </button>
+                </div>
+                <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12 }}>
+                  <tbody>
+                    {sortedItems.map(it => (
+                      <tr key={it.id} style={{ borderBottom:'1px solid var(--border)' }}>
+                        <td style={{ padding:'8px 14px', color:'var(--text-1)' }}>
+                          {it.item_name}{it.item_code ? <span style={{ color:'var(--text-2)', marginLeft:6 }}>#{it.item_code}</span> : ''}
+                        </td>
+                        <td style={{ padding:'8px 14px', color:'var(--text-2)', textAlign:'right', whiteSpace:'nowrap' }}>
+                          {it.unit_price != null ? `$${parseFloat(it.unit_price).toFixed(2)}` : '—'} × {it.quantity != null ? it.quantity : '—'}
+                        </td>
+                        <td style={{ padding:'8px 14px', fontWeight:600, color:'var(--text-1)', textAlign:'right', whiteSpace:'nowrap' }}>
+                          {it.unit_price != null && it.quantity != null
+                            ? `$${(parseFloat(it.unit_price) * parseFloat(it.quantity)).toFixed(2)}`
+                            : '—'}
+                        </td>
+                        <td style={{ padding:'8px 6px', textAlign:'right' }}>
+                          <button onClick={() => deleteItem(it.id)}
+                            style={{ padding:'3px 8px', fontSize:11, border:'1px solid #e55', borderRadius:6, background:'transparent', color:'#e55', cursor:'pointer' }}>
+                            削除
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        /* ── 集計表示 ── */
+        <DeliverySummaryView history={filtered} />
+      )}
+    </div>
+  );
+}
+
+function DeliverySummaryView({ history }) {
+  const vendorMap = {};
+  history.forEach(it => {
+    const v = it.vendor || '不明';
+    if (!vendorMap[v]) vendorMap[v] = [];
+    vendorMap[v].push(it);
+  });
+
+  return (
+    <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
+      {Object.entries(vendorMap).map(([vendor, items]) => {
+        const allDates = [...new Set(items.map(it => (it.delivered_date||'').slice(0,10)))].filter(Boolean).sort();
+        const allItems = {};
+        items.forEach(it => {
+          const date = (it.delivered_date||'').slice(0,10);
+          const key = it.item_name;
+          if (!allItems[key]) allItems[key] = { name: it.item_name, code: it.item_code||'', dates: {} };
+          allItems[key].dates[date] = (allItems[key].dates[date] || 0) + parseFloat(it.quantity || 0);
+        });
+
+        // VENDOR_ITEMSの順番でソート
+        const vItemOrder = (VENDOR_ITEMS[vendor] || []).map(v => v.name);
+        const sortedItems = Object.values(allItems).sort((a,b) => {
+          const ai = vItemOrder.indexOf(a.name);
+          const bi = vItemOrder.indexOf(b.name);
+          return (ai===-1?999:ai) - (bi===-1?999:bi);
+        });
+
+        return (
+          <div key={vendor} style={{ borderRadius:12, overflow:'hidden', border:'1px solid var(--border)' }}>
+            <div style={{ padding:'10px 14px', background:'#2C3E50', color:'white', fontWeight:600, fontSize:14 }}>
+              {vendor}
+            </div>
+            <div style={{ overflowX:'auto' }}>
+              <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12 }}>
+                <thead>
+                  <tr style={{ background:'var(--bg-2)' }}>
+                    <th style={{ padding:'7px 12px', textAlign:'left', border:'1px solid var(--border)', whiteSpace:'nowrap', minWidth:120 }}>品目</th>
+                    {allDates.map(d => (
+                      <th key={d} style={{ padding:'7px 8px', textAlign:'center', border:'1px solid var(--border)', whiteSpace:'nowrap' }}>
+                        {d.slice(5)}
+                      </th>
+                    ))}
+                    <th style={{ padding:'7px 8px', textAlign:'center', border:'1px solid var(--border)', background:'#FFF3E0', whiteSpace:'nowrap' }}>合計</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sortedItems.map((item, i) => {
+                    const total = allDates.reduce((s,d) => s + (item.dates[d]||0), 0);
+                    return (
+                      <tr key={i} style={{ background: i%2===0 ? 'var(--bg)' : 'var(--bg-2)' }}>
+                        <td style={{ padding:'6px 12px', border:'1px solid var(--border)', color:'var(--text-1)' }}>
+                          {item.name}
+                          {item.code && <span style={{ color:'var(--text-2)', fontSize:10, marginLeft:4 }}>#{item.code}</span>}
+                        </td>
+                        {allDates.map(d => (
+                          <td key={d} style={{ padding:'6px 8px', border:'1px solid var(--border)', textAlign:'center',
+                            color: item.dates[d] ? '#D85A30' : 'var(--text-2)',
+                            fontWeight: item.dates[d] ? 600 : 400 }}>
+                            {item.dates[d] || ''}
+                          </td>
+                        ))}
+                        <td style={{ padding:'6px 8px', border:'1px solid var(--border)', textAlign:'center', fontWeight:700, color:'var(--text-1)', background:'#FFF3E0' }}>
+                          {total}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
