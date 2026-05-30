@@ -863,7 +863,10 @@ app.post('/api/orders/:id/send', async (req, res) => {
 
 async function generateOrderPDF(order) {
   return new Promise((resolve, reject) => {
+    const path = require('path');
+    const fontPath = path.join(__dirname, 'fonts', 'NotoSansCJKjp-Regular.otf');
     const doc = new PDFDocument({ margin: 50, size: 'LETTER' });
+    doc.registerFont('NotoSans', fontPath);
     const buffers = [];
     doc.on('data', b => buffers.push(b));
     doc.on('end', () => resolve(Buffer.concat(buffers)));
@@ -871,13 +874,13 @@ async function generateOrderPDF(order) {
 
     // ヘッダー
     doc.rect(0, 0, doc.page.width, 80).fill('#2C3E50');
-    doc.fillColor('white').fontSize(22).font('Helvetica-Bold')
+    doc.fillColor('white').fontSize(22).font('NotoSans')
        .text('TANTO Gyoza & Ramen Bar', 50, 20);
-    doc.fontSize(12).font('Helvetica')
+    doc.fontSize(12).font('NotoSans')
        .text('PURCHASE ORDER', 50, 50);
 
     // 発注情報
-    doc.fillColor('#333').fontSize(11).font('Helvetica-Bold');
+    doc.fillColor('#333').fontSize(11).font('NotoSans');
     doc.text('ORDER INFORMATION', 50, 100);
     doc.moveTo(50, 115).lineTo(doc.page.width - 50, 115).stroke('#ccc');
 
@@ -892,14 +895,14 @@ async function generateOrderPDF(order) {
 
     let y = 125;
     info.forEach(([label, value]) => {
-      doc.font('Helvetica-Bold').fillColor('#666').fontSize(10).text(label, 50, y);
-      doc.font('Helvetica').fillColor('#333').text(value, 180, y);
+      doc.font('NotoSans').fillColor('#666').fontSize(10).text(label, 50, y);
+      doc.font('NotoSans').fillColor('#333').text(value, 180, y);
       y += 18;
     });
 
     // 品目テーブル
     y += 10;
-    doc.font('Helvetica-Bold').fontSize(11).fillColor('#333')
+    doc.font('NotoSans').fontSize(11).fillColor('#333')
        .text('ORDER ITEMS', 50, y);
     y += 15;
     doc.moveTo(50, y).lineTo(doc.page.width - 50, y).stroke('#ccc');
@@ -907,7 +910,7 @@ async function generateOrderPDF(order) {
 
     // テーブルヘッダー
     doc.rect(50, y, doc.page.width - 100, 22).fill('#34495E');
-    doc.fillColor('white').font('Helvetica-Bold').fontSize(10);
+    doc.fillColor('white').font('NotoSans').fontSize(10);
     doc.text('Item', 60, y + 6);
     doc.text('Unit', doc.page.width - 180, y + 6);
     doc.text('Qty', doc.page.width - 100, y + 6);
@@ -918,16 +921,16 @@ async function generateOrderPDF(order) {
     items.forEach((it, i) => {
       const bg = i % 2 === 0 ? '#ffffff' : '#f5f5f5';
       doc.rect(50, y, doc.page.width - 100, 20).fill(bg);
-      doc.fillColor('#333').font('Helvetica').fontSize(10);
+      doc.fillColor('#333').font('NotoSans').fontSize(10);
       doc.text(it.item_name, 60, y + 5, { width: doc.page.width - 280 });
       doc.text(it.unit, doc.page.width - 180, y + 5);
-      doc.fillColor('#D85A30').font('Helvetica-Bold').text(String(it.quantity), doc.page.width - 100, y + 5);
+      doc.fillColor('#D85A30').font('NotoSans').text(String(it.quantity), doc.page.width - 100, y + 5);
       y += 20;
     });
 
     // フッター
     doc.moveTo(50, y + 10).lineTo(doc.page.width - 50, y + 10).stroke('#ccc');
-    doc.fillColor('#666').font('Helvetica').fontSize(9)
+    doc.fillColor('#666').font('NotoSans').fontSize(9)
        .text('TANTO Gyoza & Ramen Bar | 1232 Waimanu St STE105, Honolulu, HI 96814 | Tel: 808-888-0292',
          50, y + 18, { align: 'center', width: doc.page.width - 100 });
 
