@@ -129,7 +129,7 @@ export default function App() {
         />
       )}
       {location && tab === 'receipt' && (
-        <ReceiptTab lang={lang} showToast={showToast} />
+        <ReceiptTab lang={lang} showToast={showToast} location={location} />
       )}
 
       {location && ['admin','history','settings','order'].includes(tab) && (
@@ -1830,7 +1830,7 @@ const VENDORS_JA = ['Wismettac Asian Foods, Inc.','The Cherry Co., Ltd.','JFC In
 const VENDORS_EN = ['Wismettac Asian Foods, Inc.','The Cherry Co., Ltd.','JFC International INC.','KUKUI FOOD','Select 7, Inc.','Sun Noodle','Fukuoka Package USA, Inc.','Other'];
 const VENDORS_ZH = ['Wismettac Asian Foods, Inc.','The Cherry Co., Ltd.','JFC International INC.','KUKUI FOOD','Select 7, Inc.','Sun Noodle','Fukuoka Package USA, Inc.','其他'];
 
-function ReceiptTab({ lang, t, showToast }) {
+function ReceiptTab({ lang, t, showToast, location }) {
   const [step, setStep]           = useState('capture'); // capture | review | saved
   const [imageFile, setImageFile] = useState(null);
   const [imageUrl, setImageUrl]   = useState('');
@@ -1989,6 +1989,7 @@ function ReceiptTab({ lang, t, showToast }) {
         delivered_date: r.delivered_date,
         note: r.note,
           invoice_no: footer.invoice_no || '',
+          location: location || 'Piikoi',
           tax_amount: footer.tax_amount !== '' ? parseFloat(footer.tax_amount) : 0,
         subtotal: footer.subtotal !== '' ? parseFloat(footer.subtotal) : 0,
         total: footer.total !== '' ? parseFloat(footer.total) : 0,

@@ -107,10 +107,15 @@ async function initDB() {
       subtotal      NUMERIC(10,2) DEFAULT 0,
       total         NUMERIC(10,2) DEFAULT 0,
       invoice_no    TEXT DEFAULT '',
+      location      TEXT NOT NULL DEFAULT 'Piikoi',
       created_at    TIMESTAMPTZ DEFAULT NOW()
     );
     DO $$ BEGIN
       ALTER TABLE deliveries ADD COLUMN IF NOT EXISTS tax_amount NUMERIC(10,2) DEFAULT 0;
+    EXCEPTION WHEN others THEN NULL;
+    END $$;
+    DO $$ BEGIN
+      ALTER TABLE deliveries ADD COLUMN IF NOT EXISTS location TEXT NOT NULL DEFAULT 'Piikoi';
     EXCEPTION WHEN others THEN NULL;
     END $$;
     DO $$ BEGIN
@@ -1005,7 +1010,7 @@ app.delete('/api/orders/:id', async (req, res) => {
 // ── Deliveries API ────────────────────────────────────
 app.get(`/api/deliveries`, async (req, res) => {
   try {
-    const { vendor, from, to, invoice_no } = req.query;
+    const { vendor, from, to, invoice_no, location } = req.query;
     let sql = `SELECT * FROM deliveries`;
     const params = [];
     const conds = [];
@@ -1013,6 +1018,7 @@ app.get(`/api/deliveries`, async (req, res) => {
     if (from)       { params.push(from);       conds.push(`delivered_date>=$${params.length}`); }
     if (to)         { params.push(to);         conds.push(`delivered_date<=$${params.length}`); }
     if (invoice_no) { params.push(invoice_no); conds.push(`invoice_no=$${params.length}`); }
+    if (location)   { params.push(location);   conds.push(`location=$${params.length}`); }
     if (conds.length) sql += ' WHERE ' + conds.join(' AND ');
     sql += ' ORDER BY created_at DESC LIMIT 100';
     const { rows } = await pool.query(sql, params);
@@ -1027,8 +1033,8 @@ app.post(`/api/deliveries`, async (req, res) => {
     const inserted = [];
     for (const it of items) {
       const { rows } = await pool.query(
-        `INSERT INTO deliveries (vendor,item_name,item_code,unit_price,quantity,delivered_date,note,image_url,tax_amount,subtotal,total,invoice_no) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
-        [it.vendor||'',it.item_name||'',it.item_code||'',it.unit_price??null,it.quantity??null,it.delivered_date||new Date().toISOString().slice(0,10),it.note||'',it.image_url||'',it.tax_amount??0,it.subtotal??0,it.total??0,it.invoice_no||'']
+        `INSERT INTO deliveries (vendor,item_name,item_code,unit_price,quantity,delivered_date,note,image_url,tax_amount,subtotal,total,invoice_no,location) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
+        [it.vendor||'',it.item_name||'',it.item_code||'',it.unit_price??null,it.quantity??null,it.delivered_date||new Date().toISOString().slice(0,10),it.note||'',it.image_url||'',it.tax_amount??0,it.subtotal??0,it.total??0,it.invoice_no||'',it.location||'Piikoi']
       );
       inserted.push(rows[0]);
     }
