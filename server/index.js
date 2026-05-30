@@ -842,7 +842,7 @@ app.post('/api/orders/:id/send', async (req, res) => {
       : `TANTO Order - ${order.vendor} - ${(order.order_date||'').slice(0,10)}`;
 
     const emailPayload = {
-      from: process.env.MAIL_FROM || 'noreply@medigreen.energy',
+      from: `TANTO Order (No Reply) <${process.env.MAIL_FROM || 'noreply@medigreen.energy'}>`,
       to: [toAddress],
       subject,
       html: htmlBody,
