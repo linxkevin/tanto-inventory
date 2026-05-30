@@ -941,17 +941,18 @@ async function generateOrderPDF(order) {
 // ── Orders API ────────────────────────────────────────
 
 // PO番号自動採番
-async function generatePONumber() {
+async function generatePONumber(location) {
   const now = new Date();
   const ym = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}`;
+  const prefix = location === 'University' ? 'UNIVERSITY' : 'ALAMOANA';
   const { rows } = await pool.query(
     `SELECT po_number FROM orders WHERE po_number LIKE $1 ORDER BY po_number DESC LIMIT 1`,
-    [`ALAMOANA-${ym}-%`]
+    [`${prefix}-${ym}-%`]
   );
   const seq = rows.length > 0
     ? String(parseInt(rows[0].po_number.split('-')[2]) + 1).padStart(4, '0')
     : '0001';
-  return `ALAMOANA-${ym}-${seq}`;
+  return `${prefix}-${ym}-${seq}`;
 }
 
 // GET /api/orders
@@ -988,7 +989,7 @@ app.get('/api/orders/:id', async (req, res) => {
 app.post('/api/orders', async (req, res) => {
   try {
     const { vendor, order_date, delivery_date, person, memo, items, location } = req.body;
-    const po_number = await generatePONumber();
+    const po_number = await generatePONumber(location);
     const { rows } = await pool.query(
       `INSERT INTO orders (po_number, vendor, location, order_date, delivery_date, person, memo, status)
        VALUES ($1,$2,$3,$4,$5,$6,$7,'sent') RETURNING *`,
