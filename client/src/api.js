@@ -25,6 +25,7 @@ export const api = {
   patchCategory:      (name, data) => req('PATCH', `/api/categories/${encodeURIComponent(name)}`, data),
   translate:          (text, type) => req('POST',  '/api/translate', { text, type }),
   deleteCategory:     (name)     => req('DELETE', `/api/categories/${encodeURIComponent(name)}`),
+  sendOrder:          (id, data)  => req('POST',  `/api/orders/${id}/send`, data),
   getOrders:          (params)   => req('GET',   '/api/orders' + (params ? '?' + new URLSearchParams(params) : '')),
   getOrder:           (id)       => req('GET',   `/api/orders/${id}`),
   postOrder:          (data)     => req('POST',  '/api/orders', data),

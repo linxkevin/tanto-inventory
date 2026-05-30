@@ -2473,12 +2473,19 @@ function OrderTab({ lang, t, items, showToast, location }) {
       body += itemLines;
       body += `\n\n${'='.repeat(50)}\nThank you,\nTanto Gyoza & Ramen Bar\n1232 Waimanu St STE105, Honolulu, HI 96814\nTel: 808-888-0292`;
 
-      const toEmail = TEST_MODE ? TEST_EMAIL : vm.email;
-      const ccEmail = TEST_MODE ? '' : vm.cc;
-      const finalSubject = TEST_MODE ? `[TEST] ${subject}` : subject;
-      const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(toEmail)}&cc=${encodeURIComponent(ccEmail)}&su=${encodeURIComponent(finalSubject)}&body=${encodeURIComponent(body)}`;
-      window.open(gmailUrl, '_blank');
-
+      // Resendでメール送信（PDF添付）
+      const _BASE = process.env.REACT_APP_API_URL || 'http://localhost:3001';
+      const sendRes = await fetch(`${_BASE}/api/orders/${order.id}/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to: vm.email, cc: vm.cc, test_mode: TEST_MODE }),
+      });
+      if (!sendRes.ok) throw new Error(await sendRes.text());
+      if (TEST_MODE) {
+        showToast(`🧪 テスト送信完了: ${order.po_number} → ${TEST_EMAIL}`);
+      } else {
+        showToast(`✅ 発注メール送信完了: ${order.po_number}`);
+      }
       showToast(`✅ ${order.po_number} を保存しました`);
       setStep('sent');
       loadOrders();

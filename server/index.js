@@ -2,6 +2,9 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const { Pool } = require('pg');
+const PDFDocument = require('pdfkit');
+const { Resend } = require('resend');
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -764,6 +767,160 @@ app.post('/api/analyze-receipt', async (req, res) => {
   }
 });
 
+
+
+// ── Send Order Email with PDF ─────────────────────────
+app.post('/api/orders/:id/send', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT o.*, json_agg(json_build_object('item_name',oi.item_name,'unit',oi.unit,'quantity',oi.quantity,'note',oi.note) ORDER BY oi.id) as items
+       FROM orders o LEFT JOIN order_items oi ON oi.order_id=o.id WHERE o.id=$1 GROUP BY o.id`,
+      [req.params.id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'not found' });
+    const order = rows[0];
+    const { to, cc, test_mode } = req.body;
+
+    // PDF生成
+    const pdfBuffer = await generateOrderPDF(order);
+
+    // メール本文（HTML）
+    const itemRows = (order.items||[]).filter(it=>it.item_name).map(it => `
+      <tr>
+        <td style="padding:8px 12px;border-bottom:1px solid #eee;">${it.item_name}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #eee;text-align:center;">${it.unit}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #eee;text-align:center;font-weight:600;color:#D85A30;">${it.quantity}</td>
+      </tr>`).join('');
+
+    const htmlBody = `
+    <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
+      <div style="background:#2C3E50;padding:20px;text-align:center;">
+        <h1 style="color:white;margin:0;font-size:20px;">TANTO Gyoza & Ramen Bar</h1>
+        <p style="color:#aaa;margin:5px 0 0;font-size:13px;">Purchase Order</p>
+      </div>
+      <div style="padding:24px;background:#f9f9f9;">
+        <table style="width:100%;margin-bottom:16px;">
+          <tr><td style="color:#666;font-size:13px;">PO Number</td><td style="font-weight:600;">${order.po_number}</td></tr>
+          <tr><td style="color:#666;font-size:13px;">Vendor</td><td style="font-weight:600;">${order.vendor}</td></tr>
+          <tr><td style="color:#666;font-size:13px;">Order Date</td><td>${(order.order_date||'').slice(0,10)}</td></tr>
+          ${order.delivery_date ? `<tr><td style="color:#666;font-size:13px;">Delivery Date</td><td>${(order.delivery_date||'').slice(0,10)}</td></tr>` : ''}
+          ${order.person ? `<tr><td style="color:#666;font-size:13px;">Person</td><td>${order.person}</td></tr>` : ''}
+          ${order.memo ? `<tr><td style="color:#666;font-size:13px;">Memo</td><td>${order.memo}</td></tr>` : ''}
+        </table>
+        <table style="width:100%;border-collapse:collapse;background:white;border-radius:8px;overflow:hidden;">
+          <thead>
+            <tr style="background:#34495E;color:white;">
+              <th style="padding:10px 12px;text-align:left;font-size:13px;">Item</th>
+              <th style="padding:10px 12px;text-align:center;font-size:13px;">Unit</th>
+              <th style="padding:10px 12px;text-align:center;font-size:13px;">Qty</th>
+            </tr>
+          </thead>
+          <tbody>${itemRows}</tbody>
+        </table>
+      </div>
+      <div style="padding:16px 24px;background:#f0f0f0;text-align:center;font-size:12px;color:#666;">
+        TANTO Gyoza & Ramen Bar | 1232 Waimanu St STE105, Honolulu, HI 96814 | Tel: 808-888-0292
+      </div>
+    </div>`;
+
+    const toAddress = test_mode ? process.env.TEST_EMAIL || 'sales@tanto-otabe.com' : to;
+    const subject = test_mode
+      ? `[TEST] TANTO Order - ${order.vendor} - ${(order.order_date||'').slice(0,10)}`
+      : `TANTO Order - ${order.vendor} - ${(order.order_date||'').slice(0,10)}`;
+
+    const emailPayload = {
+      from: process.env.MAIL_FROM || 'noreply@medigreen.energy',
+      to: [toAddress],
+      subject,
+      html: htmlBody,
+      attachments: [{
+        filename: `${order.po_number}.pdf`,
+        content: pdfBuffer.toString('base64'),
+      }],
+    };
+    if (!test_mode && cc) emailPayload.cc = cc.split(',').map(e=>e.trim());
+
+    const result = await resend.emails.send(emailPayload);
+    res.json({ ok: true, email_id: result.id, po_number: order.po_number });
+  } catch (e) {
+    console.error('Send order error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+async function generateOrderPDF(order) {
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument({ margin: 50, size: 'LETTER' });
+    const buffers = [];
+    doc.on('data', b => buffers.push(b));
+    doc.on('end', () => resolve(Buffer.concat(buffers)));
+    doc.on('error', reject);
+
+    // ヘッダー
+    doc.rect(0, 0, doc.page.width, 80).fill('#2C3E50');
+    doc.fillColor('white').fontSize(22).font('Helvetica-Bold')
+       .text('TANTO Gyoza & Ramen Bar', 50, 20);
+    doc.fontSize(12).font('Helvetica')
+       .text('PURCHASE ORDER', 50, 50);
+
+    // 発注情報
+    doc.fillColor('#333').fontSize(11).font('Helvetica-Bold');
+    doc.text('ORDER INFORMATION', 50, 100);
+    doc.moveTo(50, 115).lineTo(doc.page.width - 50, 115).stroke('#ccc');
+
+    const info = [
+      ['PO Number:', order.po_number],
+      ['Vendor:', order.vendor],
+      ['Order Date:', (order.order_date||'').slice(0,10)],
+      ['Delivery Date:', (order.delivery_date||'').slice(0,10) || '-'],
+      ['Person:', order.person || '-'],
+    ];
+    if (order.memo) info.push(['Memo:', order.memo]);
+
+    let y = 125;
+    info.forEach(([label, value]) => {
+      doc.font('Helvetica-Bold').fillColor('#666').fontSize(10).text(label, 50, y);
+      doc.font('Helvetica').fillColor('#333').text(value, 180, y);
+      y += 18;
+    });
+
+    // 品目テーブル
+    y += 10;
+    doc.font('Helvetica-Bold').fontSize(11).fillColor('#333')
+       .text('ORDER ITEMS', 50, y);
+    y += 15;
+    doc.moveTo(50, y).lineTo(doc.page.width - 50, y).stroke('#ccc');
+    y += 5;
+
+    // テーブルヘッダー
+    doc.rect(50, y, doc.page.width - 100, 22).fill('#34495E');
+    doc.fillColor('white').font('Helvetica-Bold').fontSize(10);
+    doc.text('Item', 60, y + 6);
+    doc.text('Unit', doc.page.width - 180, y + 6);
+    doc.text('Qty', doc.page.width - 100, y + 6);
+    y += 22;
+
+    // テーブル行
+    const items = (order.items||[]).filter(it=>it.item_name);
+    items.forEach((it, i) => {
+      const bg = i % 2 === 0 ? '#ffffff' : '#f5f5f5';
+      doc.rect(50, y, doc.page.width - 100, 20).fill(bg);
+      doc.fillColor('#333').font('Helvetica').fontSize(10);
+      doc.text(it.item_name, 60, y + 5, { width: doc.page.width - 280 });
+      doc.text(it.unit, doc.page.width - 180, y + 5);
+      doc.fillColor('#D85A30').font('Helvetica-Bold').text(String(it.quantity), doc.page.width - 100, y + 5);
+      y += 20;
+    });
+
+    // フッター
+    doc.moveTo(50, y + 10).lineTo(doc.page.width - 50, y + 10).stroke('#ccc');
+    doc.fillColor('#666').font('Helvetica').fontSize(9)
+       .text('TANTO Gyoza & Ramen Bar | 1232 Waimanu St STE105, Honolulu, HI 96814 | Tel: 808-888-0292',
+         50, y + 18, { align: 'center', width: doc.page.width - 100 });
+
+    doc.end();
+  });
+}
 
 // ── Orders API ────────────────────────────────────────
 
