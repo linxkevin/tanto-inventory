@@ -2938,8 +2938,14 @@ function MonthlyTab({ history, lang, l }) {
   const months = [...new Set(history.map(h => (h.delivered_date || '').slice(0,7)))].filter(Boolean).sort().reverse();
   const [selectedMonth, setSelectedMonth] = useState(months[0] || '');
   const [selectedVendor, setSelectedVendor] = useState(null);
+  const [selectedLocation, setSelectedLocation] = useState('');
+  const locations = [...new Set(history.map(h => h.location).filter(Boolean))].sort();
 
-  const filtered = history.filter(h => (h.delivered_date || '').startsWith(selectedMonth));
+  const filtered = history.filter(h => {
+    const matchMonth = (h.delivered_date || '').startsWith(selectedMonth);
+    const matchLocation = !selectedLocation || h.location === selectedLocation;
+    return matchMonth && matchLocation;
+  });
 
   // ベンダー別集計
   const vendorMap = {};
@@ -2971,6 +2977,24 @@ function MonthlyTab({ history, lang, l }) {
 
   return (
     <div>
+      {/* 店舗選択 */}
+      {locations.length > 1 && (
+        <div style={{ display:'flex', gap:6, marginBottom:10, overflowX:'auto', paddingBottom:4 }}>
+          <button onClick={() => setSelectedLocation('')}
+            style={{ padding:'5px 12px', borderRadius:20, border:'1px solid var(--border)', whiteSpace:'nowrap', fontSize:11, cursor:'pointer',
+              background: !selectedLocation ? '#D85A30' : 'var(--bg-2)', color: !selectedLocation ? 'white' : 'var(--text-2)' }}>
+            全店舗
+          </button>
+          {locations.map(loc => (
+            <button key={loc} onClick={() => { setSelectedLocation(loc); setSelectedVendor(null); }}
+              style={{ padding:'5px 12px', borderRadius:20, border:'1px solid var(--border)', whiteSpace:'nowrap', fontSize:11, cursor:'pointer',
+                background: selectedLocation===loc ? '#D85A30' : 'var(--bg-2)', color: selectedLocation===loc ? 'white' : 'var(--text-2)' }}>
+              {loc}店
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* 月選択 */}
       <div style={{ display:'flex', gap:8, marginBottom:16, overflowX:'auto', paddingBottom:4 }}>
         {months.map(m => (
