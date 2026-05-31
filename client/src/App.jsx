@@ -1401,11 +1401,6 @@ Japanese: ${name}`
                   onChange={e=>setEditingItem(v=>({...v,min_stock:parseInt(e.target.value)||0}))} />
               </div>
             </div>
-            <div className="form-row">
-              <label className="form-label">{lang==='en'?'Vendor':lang==='zh'?'供应商':'業者'}</label>
-              <input className="form-input" value={editingItem.vendor||''}
-                onChange={e=>setEditingItem(v=>({...v,vendor:e.target.value}))} />
-            </div>
             <div style={{borderTop:'1px dashed var(--border)',marginTop:12,paddingTop:12}}>
               <div style={{fontSize:12,fontWeight:600,color:'var(--text-2)',marginBottom:8}}>🔗 突合情報（納品伝票との紐付け）</div>
               <div className="form-row">
@@ -1426,6 +1421,11 @@ Japanese: ${name}`
                   placeholder="例: Pork Ground"
                   onChange={e=>setEditingItem(v=>({...v,order_item_name:e.target.value}))} />
               </div>
+            </div>
+            <div className="form-row">
+              <label className="form-label">{lang==='en'?'Vendor':lang==='zh'?'供应商':'業者'}</label>
+              <input className="form-input" value={editingItem.vendor||''}
+                onChange={e=>setEditingItem(v=>({...v,vendor:e.target.value}))} />
             </div>
             <div style={{display:'flex',gap:8,justifyContent:'flex-end',marginTop:'1rem'}}>
               <button className="btn-outline" onClick={()=>setEditingItem(null)}>
