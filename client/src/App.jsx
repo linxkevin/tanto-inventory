@@ -2621,7 +2621,7 @@ function OrderTab({ lang, t, items, showToast, location, sessions }) {
                   <div style={{ fontSize:12, color:'var(--text-2)', marginBottom:10 }}>
                     最新棚卸し: {sessions[0]?.date} {sessions[0]?.time} — {sessions[0]?.staff_name}
                   </div>
-                  <div style={{ display:'flex', gap:8', flexWrap:'wrap' }}>
+                  <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
                     {Object.keys(VENDOR_ITEMS).map(v => {
                       const sessionItems = sessions[0]?.items || [];
                       const vendorMasterItems = items.filter(it => {
