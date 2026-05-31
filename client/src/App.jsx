@@ -1368,9 +1368,9 @@ Japanese: ${name}`
 
       {/* Edit Modal */}
       {editingItem && (
-        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.45)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:200,padding:'2rem',overflowY:'auto'}}
+        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.45)',zIndex:200,overflowY:'auto',padding:'2rem'}}
           onClick={e=>e.target===e.currentTarget&&setEditingItem(null)}>
-          <div style={{background:'var(--bg)',borderRadius:'var(--radius)',border:'0.5px solid var(--border)',padding:'1.5rem',width:'100%',maxWidth:420,position:'relative',maxHeight:'85vh',overflowY:'scroll'}}>
+          <div style={{background:'var(--bg)',borderRadius:'var(--radius)',border:'0.5px solid var(--border)',padding:'1.5rem',width:'100%',maxWidth:420,position:'relative',margin:'0 auto'}}>
             <button onClick={()=>setEditingItem(null)}
               style={{position:'absolute',top:12,right:14,background:'none',border:'none',fontSize:20,color:'var(--text-2)',cursor:'pointer'}}>×</button>
             <div style={{fontSize:15,fontWeight:500,marginBottom:'1rem'}}>
@@ -1401,10 +1401,10 @@ Japanese: ${name}`
                   onChange={e=>setEditingItem(v=>({...v,min_stock:parseInt(e.target.value)||0}))} />
               </div>
             </div>
-            <details style={{borderTop:'1px dashed var(--border)',marginTop:12,paddingTop:12}}>
-              <summary style={{fontSize:12,fontWeight:600,color:'#D85A30',marginBottom:8,cursor:'pointer',listStyle:'none'}}>
-                🔗 突合情報（納品伝票との紐付け）▼
-              </summary>
+            <div style={{borderTop:'1px dashed var(--border)',marginTop:12,paddingTop:12}}>
+              <div style={{fontSize:12,fontWeight:600,color:'#D85A30',marginBottom:8}}>
+                🔗 突合情報（納品伝票との紐付け）
+              </div>
               <div className="form-row" style={{marginTop:8}}>
                 <label className="form-label">伝票品名</label>
                 <input className="form-input" value={editingItem.vendor_item_name||''}
@@ -1423,7 +1423,7 @@ Japanese: ${name}`
                   placeholder="例: Pork Ground"
                   onChange={e=>setEditingItem(v=>({...v,order_item_name:e.target.value}))} />
               </div>
-            </details>
+            </div>
             <div className="form-row">
               <label className="form-label">{lang==='en'?'Vendor':lang==='zh'?'供应商':'業者'}</label>
               <input className="form-input" value={editingItem.vendor||''}
