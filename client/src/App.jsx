@@ -1368,7 +1368,7 @@ Japanese: ${name}`
 
       {/* Edit Modal */}
       {editingItem && (
-        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.45)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:200,padding:'1rem'}}
+        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.45)',display:'flex',alignItems:'flex-start',justifyContent:'center',zIndex:200,padding:'1rem',overflowY:'auto'}}
           onClick={e=>e.target===e.currentTarget&&setEditingItem(null)}>
           <div style={{background:'var(--bg)',borderRadius:'var(--radius)',border:'0.5px solid var(--border)',padding:'1.5rem',width:'100%',maxWidth:420,position:'relative',maxHeight:'90vh',overflowY:'auto'}}>
             <button onClick={()=>setEditingItem(null)}
