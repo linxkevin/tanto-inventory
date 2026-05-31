@@ -1370,7 +1370,7 @@ Japanese: ${name}`
       {editingItem && (
         <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.45)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:200,padding:'1rem'}}
           onClick={e=>e.target===e.currentTarget&&setEditingItem(null)}>
-          <div style={{background:'var(--bg)',borderRadius:'var(--radius)',border:'0.5px solid var(--border)',padding:'1.5rem',width:'100%',maxWidth:420,position:'relative'}}>
+          <div style={{background:'var(--bg)',borderRadius:'var(--radius)',border:'0.5px solid var(--border)',padding:'1.5rem',width:'100%',maxWidth:420,position:'relative',maxHeight:'90vh',overflowY:'auto'}}>
             <button onClick={()=>setEditingItem(null)}
               style={{position:'absolute',top:12,right:14,background:'none',border:'none',fontSize:20,color:'var(--text-2)',cursor:'pointer'}}>×</button>
             <div style={{fontSize:15,fontWeight:500,marginBottom:'1rem'}}>
