@@ -1401,9 +1401,11 @@ Japanese: ${name}`
                   onChange={e=>setEditingItem(v=>({...v,min_stock:parseInt(e.target.value)||0}))} />
               </div>
             </div>
-            <div style={{borderTop:'1px dashed var(--border)',marginTop:12,paddingTop:12}}>
-              <div style={{fontSize:12,fontWeight:600,color:'var(--text-2)',marginBottom:8}}>🔗 突合情報（納品伝票との紐付け）</div>
-              <div className="form-row">
+            <details style={{borderTop:'1px dashed var(--border)',marginTop:12,paddingTop:12}}>
+              <summary style={{fontSize:12,fontWeight:600,color:'#D85A30',marginBottom:8,cursor:'pointer',listStyle:'none'}}>
+                🔗 突合情報（納品伝票との紐付け）▼
+              </summary>
+              <div className="form-row" style={{marginTop:8}}>
                 <label className="form-label">伝票品名</label>
                 <input className="form-input" value={editingItem.vendor_item_name||''}
                   placeholder="例: PORK GROUND"
@@ -1421,7 +1423,7 @@ Japanese: ${name}`
                   placeholder="例: Pork Ground"
                   onChange={e=>setEditingItem(v=>({...v,order_item_name:e.target.value}))} />
               </div>
-            </div>
+            </details>
             <div className="form-row">
               <label className="form-label">{lang==='en'?'Vendor':lang==='zh'?'供应商':'業者'}</label>
               <input className="form-input" value={editingItem.vendor||''}
