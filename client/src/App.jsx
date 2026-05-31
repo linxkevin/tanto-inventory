@@ -968,6 +968,7 @@ function SettingsTab({ lang, t, items, setItems, adminEmail, setAdminEmail, cate
   const [settingsFilter, setSettingsFilter] = useState('all'); // 'all' | 'active' | 'inactive'
   const [searchQuery, setSearchQuery] = useState('');
   const [editingItem, setEditingItem] = useState(null); // item being edited
+  const [matchingItem, setMatchingItem] = useState(null); // item for matching info
 
   // Load ALL items (including inactive) for settings
   useEffect(() => {
@@ -1040,6 +1041,28 @@ function SettingsTab({ lang, t, items, setItems, adminEmail, setAdminEmail, cate
       setItems(its => its.map(i => i.id===editingItem.id ? {...i, ...updated} : i));
       setEditingItem(null);
       showToast(lang==='en'?'Item updated.':lang==='zh'?'商品已更新。':'アイテムを更新しました。');
+    } catch(e) { showToast(t('toastError')); }
+  }
+
+  async function saveMatchingInfo() {
+    if (!matchingItem) return;
+    try {
+      const updated = await api.patchItem(matchingItem.id, {
+        name_ja: matchingItem.name_ja,
+        name_en: matchingItem.name_en,
+        name_zh: matchingItem.name_zh,
+        unit: matchingItem.unit,
+        min_stock: matchingItem.min_stock,
+        category: matchingItem.category,
+        active: matchingItem.active !== false,
+        vendor_item_name: matchingItem.vendor_item_name || '',
+        vendor_item_code: matchingItem.vendor_item_code || '',
+        order_item_name: matchingItem.order_item_name || '',
+      });
+      setAllItems(its => its.map(i => i.id===matchingItem.id ? {...i, ...updated} : i));
+      setItems(its => its.map(i => i.id===matchingItem.id ? {...i, ...updated} : i));
+      setMatchingItem(null);
+      showToast('突合情報を保存しました。');
     } catch(e) { showToast(t('toastError')); }
   }
 
@@ -1346,6 +1369,10 @@ Japanese: ${name}`
                 <span style={{fontSize:11,color:'var(--text-2)'}}>{item.min_stock}</span>
               </div>
               <div className="scard-row" style={{marginTop:8,paddingTop:8,borderTop:'0.5px solid var(--border)'}}>
+                <button onClick={()=>setMatchingItem({...item})}
+                  style={{fontSize:11,padding:'4px 10px',borderRadius:8,border:'1px solid #D85A30',background:'transparent',color:'#D85A30',cursor:'pointer',marginRight:4}}>
+                  🔗
+                </button>
                 <button onClick={()=>setEditingItem({...item})}
                   style={{fontSize:12,padding:'4px 12px',borderRadius:10,border:'0.5px solid #D85A30',background:'#FAECE7',cursor:'pointer',color:'#D85A30',fontWeight:500}}>
                   <i className="ti ti-pencil" aria-hidden="true" style={{fontSize:11}} /> {lang==='en'?'Edit':lang==='zh'?'编辑':'編集'}
@@ -1401,29 +1428,6 @@ Japanese: ${name}`
                   onChange={e=>setEditingItem(v=>({...v,min_stock:parseInt(e.target.value)||0}))} />
               </div>
             </div>
-            <div style={{borderTop:'1px dashed var(--border)',marginTop:12,paddingTop:12}}>
-              <div style={{fontSize:12,fontWeight:600,color:'#D85A30',marginBottom:8}}>
-                🔗 突合情報（納品伝票との紐付け）
-              </div>
-              <div className="form-row" style={{marginTop:8}}>
-                <label className="form-label">伝票品名</label>
-                <input className="form-input" value={editingItem.vendor_item_name||''}
-                  placeholder="例: PORK GROUND"
-                  onChange={e=>setEditingItem(v=>({...v,vendor_item_name:e.target.value}))} />
-              </div>
-              <div className="form-row">
-                <label className="form-label">伝票品番</label>
-                <input className="form-input" value={editingItem.vendor_item_code||''}
-                  placeholder="例: P-GP-WS"
-                  onChange={e=>setEditingItem(v=>({...v,vendor_item_code:e.target.value}))} />
-              </div>
-              <div className="form-row">
-                <label className="form-label">発注書品名</label>
-                <input className="form-input" value={editingItem.order_item_name||''}
-                  placeholder="例: Pork Ground"
-                  onChange={e=>setEditingItem(v=>({...v,order_item_name:e.target.value}))} />
-              </div>
-            </div>
             <div className="form-row">
               <label className="form-label">{lang==='en'?'Vendor':lang==='zh'?'供应商':'業者'}</label>
               <input className="form-input" value={editingItem.vendor||''}
@@ -1435,6 +1439,45 @@ Japanese: ${name}`
               </button>
               <button className="btn-primary" onClick={updateItem}>
                 <i className="ti ti-device-floppy" aria-hidden="true" /> {lang==='en'?'Save':lang==='zh'?'保存':'保存'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Matching Modal */}
+      {matchingItem && (
+        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.45)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:200,padding:'1rem'}}
+          onClick={e=>e.target===e.currentTarget&&setMatchingItem(null)}>
+          <div style={{background:'var(--bg)',borderRadius:'var(--radius)',border:'0.5px solid var(--border)',padding:'1.5rem',width:'100%',maxWidth:400,position:'relative'}}>
+            <button onClick={()=>setMatchingItem(null)}
+              style={{position:'absolute',top:12,right:14,background:'none',border:'none',fontSize:20,color:'var(--text-2)',cursor:'pointer'}}>×</button>
+            <div style={{fontSize:15,fontWeight:500,marginBottom:4}}>
+              🔗 突合情報
+            </div>
+            <div style={{fontSize:12,color:'var(--text-2)',marginBottom:16}}>{matchingItem.name_ja}</div>
+            <div className="form-row">
+              <label className="form-label">伝票品名（納品伝票上の品名）</label>
+              <input className="form-input" value={matchingItem.vendor_item_name||''}
+                placeholder="例: PORK GROUND"
+                onChange={e=>setMatchingItem(v=>({...v,vendor_item_name:e.target.value}))} />
+            </div>
+            <div className="form-row">
+              <label className="form-label">伝票品番</label>
+              <input className="form-input" value={matchingItem.vendor_item_code||''}
+                placeholder="例: P-GP-WS"
+                onChange={e=>setMatchingItem(v=>({...v,vendor_item_code:e.target.value}))} />
+            </div>
+            <div className="form-row">
+              <label className="form-label">発注書品名（発注フォーム上の品名）</label>
+              <input className="form-input" value={matchingItem.order_item_name||''}
+                placeholder="例: Pork Ground"
+                onChange={e=>setMatchingItem(v=>({...v,order_item_name:e.target.value}))} />
+            </div>
+            <div style={{display:'flex',gap:8,justifyContent:'flex-end',marginTop:'1rem'}}>
+              <button className="btn-outline" onClick={()=>setMatchingItem(null)}>キャンセル</button>
+              <button className="btn-primary" onClick={saveMatchingInfo}>
+                <i className="ti ti-device-floppy" aria-hidden="true" /> 保存
               </button>
             </div>
           </div>
