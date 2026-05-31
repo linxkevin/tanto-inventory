@@ -1032,6 +1032,9 @@ function SettingsTab({ lang, t, items, setItems, adminEmail, setAdminEmail, cate
         min_stock: editingItem.min_stock,
         category: editingItem.category,
         active: editingItem.active !== false,
+        vendor_item_name: editingItem.vendor_item_name || '',
+        vendor_item_code: editingItem.vendor_item_code || '',
+        order_item_name: editingItem.order_item_name || '',
       });
       setAllItems(its => its.map(i => i.id===editingItem.id ? {...i, ...updated} : i));
       setItems(its => its.map(i => i.id===editingItem.id ? {...i, ...updated} : i));
@@ -1402,6 +1405,27 @@ Japanese: ${name}`
               <label className="form-label">{lang==='en'?'Vendor':lang==='zh'?'供应商':'業者'}</label>
               <input className="form-input" value={editingItem.vendor||''}
                 onChange={e=>setEditingItem(v=>({...v,vendor:e.target.value}))} />
+            </div>
+            <div style={{borderTop:'1px dashed var(--border)',marginTop:12,paddingTop:12}}>
+              <div style={{fontSize:12,fontWeight:600,color:'var(--text-2)',marginBottom:8}}>🔗 突合情報（納品伝票との紐付け）</div>
+              <div className="form-row">
+                <label className="form-label">伝票品名</label>
+                <input className="form-input" value={editingItem.vendor_item_name||''}
+                  placeholder="例: PORK GROUND"
+                  onChange={e=>setEditingItem(v=>({...v,vendor_item_name:e.target.value}))} />
+              </div>
+              <div className="form-row">
+                <label className="form-label">伝票品番</label>
+                <input className="form-input" value={editingItem.vendor_item_code||''}
+                  placeholder="例: P-GP-WS"
+                  onChange={e=>setEditingItem(v=>({...v,vendor_item_code:e.target.value}))} />
+              </div>
+              <div className="form-row">
+                <label className="form-label">発注書品名</label>
+                <input className="form-input" value={editingItem.order_item_name||''}
+                  placeholder="例: Pork Ground"
+                  onChange={e=>setEditingItem(v=>({...v,order_item_name:e.target.value}))} />
+              </div>
             </div>
             <div style={{display:'flex',gap:8,justifyContent:'flex-end',marginTop:'1rem'}}>
               <button className="btn-outline" onClick={()=>setEditingItem(null)}>

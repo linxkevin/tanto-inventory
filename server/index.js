@@ -44,6 +44,18 @@ async function initDB() {
       ALTER TABLE items ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT true;
     EXCEPTION WHEN others THEN NULL;
     END $$;
+    DO $$ BEGIN
+      ALTER TABLE items ADD COLUMN IF NOT EXISTS vendor_item_name TEXT DEFAULT '';
+    EXCEPTION WHEN others THEN NULL;
+    END $$;
+    DO $$ BEGIN
+      ALTER TABLE items ADD COLUMN IF NOT EXISTS vendor_item_code TEXT DEFAULT '';
+    EXCEPTION WHEN others THEN NULL;
+    END $$;
+    DO $$ BEGIN
+      ALTER TABLE items ADD COLUMN IF NOT EXISTS order_item_name TEXT DEFAULT '';
+    EXCEPTION WHEN others THEN NULL;
+    END $$;
 
     CREATE TABLE IF NOT EXISTS sessions (
       id SERIAL PRIMARY KEY,
@@ -464,17 +476,21 @@ app.get('/api/items', async (req, res) => {
 
 // PATCH item settings (name_ja / name_en / name_zh / unit / min_stock / category / active)
 app.patch('/api/items/:id', async (req, res) => {
-  const { name_ja, name_en, name_zh, unit, min_stock, category, active } = req.body;
+  const { name_ja, name_en, name_zh, unit, min_stock, category, active, vendor_item_name, vendor_item_code, order_item_name } = req.body;
   try {
     const { rows } = await pool.query(
       `UPDATE items SET
         name_ja=COALESCE($1, name_ja),
         name_en=COALESCE($2, name_en),
         name_zh=COALESCE($3, name_zh),
-        unit=$4, min_stock=$5, category=$6, active=$7
+        unit=$4, min_stock=$5, category=$6, active=$7,
+        vendor_item_name=COALESCE($9, vendor_item_name),
+        vendor_item_code=COALESCE($10, vendor_item_code),
+        order_item_name=COALESCE($11, order_item_name)
        WHERE id=$8 RETURNING *`,
       [name_ja||null, name_en||null, name_zh||null, unit, min_stock, category || '調味料',
-       active !== undefined ? active : true, req.params.id]
+       active !== undefined ? active : true, req.params.id,
+       vendor_item_name||null, vendor_item_code||null, order_item_name||null]
     );
     res.json(rows[0]);
   } catch (e) {
