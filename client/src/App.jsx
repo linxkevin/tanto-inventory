@@ -1368,15 +1368,16 @@ Japanese: ${name}`
                 <span className="scard-label">{t('scardMin')}</span>
                 <span style={{fontSize:11,color:'var(--text-2)'}}>{item.min_stock}</span>
               </div>
-              <div className="scard-row" style={{marginTop:8,paddingTop:8,borderTop:'0.5px solid var(--border)'}}>
+              <div style={{marginTop:8,paddingTop:8,borderTop:'0.5px solid var(--border)',display:'flex',gap:6,alignItems:'center'}}>
                 <button onClick={()=>setMatchingItem({...item})}
-                  style={{fontSize:11,padding:'4px 10px',borderRadius:8,border:'1px solid #D85A30',background:'transparent',color:'#D85A30',cursor:'pointer',marginRight:4}}>
-                  🔗
+                  style={{fontSize:11,padding:'4px 10px',borderRadius:8,border:'1px solid #D85A30',background:'transparent',color:'#D85A30',cursor:'pointer'}}>
+                  🔗 突合
                 </button>
                 <button onClick={()=>setEditingItem({...item})}
                   style={{fontSize:12,padding:'4px 12px',borderRadius:10,border:'0.5px solid #D85A30',background:'#FAECE7',cursor:'pointer',color:'#D85A30',fontWeight:500}}>
                   <i className="ti ti-pencil" aria-hidden="true" style={{fontSize:11}} /> {lang==='en'?'Edit':lang==='zh'?'编辑':'編集'}
                 </button>
+                <div style={{flex:1}}></div>
                 <button onClick={()=>toggleActive(item)}
                   style={{fontSize:11,padding:'3px 10px',borderRadius:10,border:'0.5px solid var(--border)',background:'transparent',cursor:'pointer',color:'var(--text-2)'}}>
                   {isHidden
