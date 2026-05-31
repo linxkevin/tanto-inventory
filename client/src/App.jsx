@@ -1799,7 +1799,7 @@ function AdminArea({ lang, t, items, sessions, location, activeTab, setActiveTab
 
       {/* Sub-tab content */}
       {currentTab === 'order' && (
-        <OrderTab lang={lang} t={t} items={items} showToast={showToast} location={location} />
+        <OrderTab lang={lang} t={t} items={items} showToast={showToast} location={location} sessions={sessions} />
       )}
 
       {currentTab === 'admin' && (
@@ -2397,7 +2397,7 @@ const VENDOR_ITEMS = {
   ],
 };
 
-function OrderTab({ lang, t, items, showToast, location }) {
+function OrderTab({ lang, t, items, showToast, location, sessions }) {
   const today = new Date().toISOString().slice(0,10);
   const [step, setStep]             = useState('form'); // form | confirm | sent
   const [vendor, setVendor]         = useState('');
@@ -2544,6 +2544,50 @@ function OrderTab({ lang, t, items, showToast, location }) {
           {/* Step: form */}
           {step === 'form' && (
             <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
+              {/* 棚卸し推奨発注 */}
+              {sessions && sessions.length > 0 && (
+                <div style={{ background:'rgba(216,90,48,0.06)', border:'1px solid rgba(216,90,48,0.3)', borderRadius:10, padding:'12px 14px', marginBottom:4 }}>
+                  <div style={{ fontSize:13, fontWeight:600, color:'#D85A30', marginBottom:8 }}>📦 棚卸しから推奨発注</div>
+                  <div style={{ fontSize:12, color:'var(--text-2)', marginBottom:10 }}>
+                    最新棚卸し: {sessions[0]?.date} {sessions[0]?.time} — {sessions[0]?.staff_name}
+                  </div>
+                  <div style={{ display:'flex', gap:8', flexWrap:'wrap' }}>
+                    {Object.keys(VENDOR_ITEMS).map(v => {
+                      const sessionItems = sessions[0]?.items || [];
+                      const vendorMasterItems = items.filter(it => {
+                        const vName = it.vendor?.toLowerCase() || '';
+                        const vKey = v.toLowerCase();
+                        return vKey.includes(vName.split(' ')[0]?.toLowerCase()) ||
+                               vName.includes(v.split(' ')[0]?.toLowerCase());
+                      });
+                      const needed = vendorMasterItems.filter(it => {
+                        const si = sessionItems.find(s => s.item_id === it.id);
+                        const cur = si ? (si.current_stock || 0) : 0;
+                        return it.min_stock > 0 && cur < it.min_stock;
+                      });
+                      if (needed.length === 0) return null;
+                      return (
+                        <button key={v} onClick={() => {
+                          setVendor(v);
+                          const newQtys = {};
+                          needed.forEach(it => {
+                            const si = sessionItems.find(s => s.item_id === it.id);
+                            const cur = si ? (si.current_stock || 0) : 0;
+                            const shortage = it.min_stock - cur;
+                            const vItem = VENDOR_ITEMS[v]?.find(vi => vi.name === it.name_ja);
+                            if (vItem) newQtys[vItem.name] = shortage;
+                          });
+                          setQuantities(newQtys);
+                        }}
+                          style={{ padding:'7px 12px', borderRadius:8, border:'1px solid #D85A30', background:'white', color:'#D85A30', fontSize:12, fontWeight:600, cursor:'pointer' }}>
+                          {v.split(' ')[0]} ({needed.length}品目)
+                        </button>
+                      );
+                    }).filter(Boolean)}
+                  </div>
+                </div>
+              )}
+
               {/* 業者選択 */}
               <div>
                 <div style={{ fontSize:12, color:'var(--text-2)', marginBottom:6 }}>{l('vendor')}</div>
