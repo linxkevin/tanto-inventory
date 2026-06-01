@@ -1030,6 +1030,65 @@ app.delete('/api/orders/:id', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+
+// ── Apply Delivery to Stock ───────────────────────────
+// 納品データを棚卸し在庫に反映
+async function applyDeliveryToStock(delivery, location) {
+  try {
+    // 突合情報でアイテムを特定
+    const { rows: matchedItems } = await pool.query(`
+      SELECT id, name_ja FROM items 
+      WHERE active = true
+      AND (
+        (vendor_item_name != '' AND LOWER(vendor_item_name) = LOWER($1))
+        OR (vendor_item_code != '' AND LOWER(vendor_item_code) = LOWER($2))
+      )
+      LIMIT 1
+    `, [delivery.item_name || '', delivery.item_code || '']);
+
+    if (matchedItems.length === 0) return null; // 突合なし
+
+    const itemId = matchedItems[0].id;
+    const qty = parseFloat(delivery.quantity) || 0;
+    if (qty <= 0) return null;
+
+    // 最新の棚卸しセッションを取得
+    const { rows: sessions } = await pool.query(`
+      SELECT id FROM sessions 
+      WHERE location = $1
+      ORDER BY created_at DESC LIMIT 1
+    `, [location || 'Piikoi']);
+
+    if (sessions.length === 0) return null;
+
+    const sessionId = sessions[0].id;
+
+    // session_itemsのcurrent_stockに加算
+    const { rows: existing } = await pool.query(`
+      SELECT id, current_stock FROM session_items
+      WHERE session_id = $1 AND item_id = $2
+    `, [sessionId, itemId]);
+
+    if (existing.length > 0) {
+      const newStock = (existing[0].current_stock || 0) + qty;
+      await pool.query(`
+        UPDATE session_items SET current_stock = $1
+        WHERE session_id = $2 AND item_id = $3
+      `, [newStock, sessionId, itemId]);
+    } else {
+      await pool.query(`
+        INSERT INTO session_items (session_id, item_id, current_stock)
+        VALUES ($1, $2, $3)
+      `, [sessionId, itemId, qty]);
+    }
+
+    return { item_id: itemId, item_name: matchedItems[0].name_ja, qty_added: qty };
+  } catch (e) {
+    console.error('applyDeliveryToStock error:', e);
+    return null;
+  }
+}
+
 // ── Deliveries API ────────────────────────────────────
 app.get(`/api/deliveries`, async (req, res) => {
   try {
@@ -1060,6 +1119,12 @@ app.post(`/api/deliveries`, async (req, res) => {
         [it.vendor||'',it.item_name||'',it.item_code||'',it.unit_price??null,it.quantity??null,it.delivered_date||new Date().toISOString().slice(0,10),it.note||'',it.image_url||'',it.tax_amount??0,it.subtotal??0,it.total??0,it.invoice_no||'',it.location||'Piikoi']
       );
       inserted.push(rows[0]);
+
+      // 突合情報があれば在庫に自動反映
+      const applied = await applyDeliveryToStock(it, it.location || 'Piikoi');
+      if (applied) {
+        console.log(`✅ 在庫反映: ${applied.item_name} +${applied.qty_added}`);
+      }
     }
     res.json(inserted);
   } catch (e) { res.status(500).json({ error: e.message }); }
