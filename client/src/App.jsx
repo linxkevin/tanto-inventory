@@ -2170,7 +2170,7 @@ function ReceiptTab({ lang, t, showToast, location }) {
                 )}
                 <input
                   ref={inputRef}
-                  type="file" accept="image/*" capture="environment"
+                  type="file" accept="image/*"
                   onChange={handleFileChange}
                   style={{ position:'absolute', inset:0, opacity:0, cursor:'pointer' }}
                 />
