@@ -32,6 +32,12 @@ export default function App() {
 
   // Load data on mount
   useEffect(() => {
+    if (adminUnlocked) {
+      api.getSessions().then(setSessions).catch(console.error);
+    }
+  }, [adminUnlocked]); // eslint-disable-line
+
+  useEffect(() => {
     Promise.all([api.getItems(), api.getSessions(), api.getSettings(), api.getCategories()])
       .then(([its, sess, settings, cats]) => {
         setItems(its); // active items only (for staff)
@@ -45,9 +51,14 @@ export default function App() {
       .finally(() => setLoading(false));
   }, []); // eslint-disable-line
 
-  const refreshSessions = (loc) => {
-    const l = loc !== undefined ? loc : location;
-    api.getSessions(l).then(setSessions).catch(console.error);
+  const refreshSessions = (loc, adminMode) => {
+    // 管理者モードの場合は全店舗のセッションを取得
+    if (adminMode || adminUnlocked) {
+      api.getSessions().then(setSessions).catch(console.error);
+    } else {
+      const l = loc !== undefined ? loc : location;
+      api.getSessions(l).then(setSessions).catch(console.error);
+    }
   };
 
   if (loading) return (
