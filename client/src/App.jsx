@@ -3226,6 +3226,50 @@ function MonthlyTab({ history, lang, l }) {
 }
 
 
+
+function EditableVendor({ group, onSave }) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(group.vendor);
+
+  const handleSave = async () => {
+    if (value.trim() && value !== group.vendor) {
+      await onSave(value.trim());
+    }
+    setEditing(false);
+  };
+
+  if (editing) {
+    return (
+      <div style={{ display:'flex', gap:6, alignItems:'center' }}>
+        <input
+          value={value}
+          onChange={e => setValue(e.target.value)}
+          onKeyDown={e => { if(e.key==='Enter') handleSave(); if(e.key==='Escape') setEditing(false); }}
+          autoFocus
+          style={{ fontSize:14, fontWeight:600, padding:'2px 8px', borderRadius:6, border:'1px solid #D85A30', outline:'none', minWidth:150 }}
+        />
+        <button onClick={handleSave}
+          style={{ padding:'2px 10px', borderRadius:6, border:'none', background:'#D85A30', color:'white', fontSize:12, cursor:'pointer' }}>
+          保存
+        </button>
+        <button onClick={() => setEditing(false)}
+          style={{ padding:'2px 8px', borderRadius:6, border:'1px solid var(--border)', background:'transparent', fontSize:12, cursor:'pointer' }}>
+          ×
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <span
+      onClick={() => { setValue(group.vendor); setEditing(true); }}
+      style={{ fontWeight:600, fontSize:14, color:'var(--text-1)', cursor:'pointer', borderBottom:'1px dashed var(--border)' }}
+      title="クリックして編集">
+      {group.vendor} ✏️
+    </span>
+  );
+}
+
 function DeliveryHistory({ history, deleteItem, deleteGroup }) {
   const [selectedMonth, setSelectedMonth] = useState('');
   const [selectedVendor, setSelectedVendor] = useState('');
@@ -3400,16 +3444,26 @@ function DeliveryHistory({ history, deleteItem, deleteGroup }) {
             return (
               <div key={group.key} style={{ background:'var(--bg-2)', borderRadius:12, overflow:'hidden', border:'1px solid var(--border)' }}>
                 <div style={{ padding:'10px 14px', background:'var(--bg)', borderBottom:'1px solid var(--border)', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-                  <div>
-                    <span style={{ fontWeight:600, fontSize:14, color:'var(--text-1)' }}>{group.vendor}</span>
-                    <span style={{ fontSize:12, color:'var(--text-2)', marginLeft:10 }}>{group.date} · {group.items.length}品目</span>
+                  <div style={{ display:'flex', alignItems:'center', flexWrap:'wrap', gap:6 }}>
+                    <EditableVendor group={group} onSave={async (newVendor) => {
+                      const BASE = process.env.REACT_APP_API_URL || 'http://localhost:3001';
+                      await Promise.all(group.items.map(it =>
+                        fetch(`${BASE}/api/deliveries/${it.id}`, {
+                          method: 'PATCH',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ ...it, vendor: newVendor })
+                        })
+                      ));
+                      loadHistory();
+                    }} />
+                    <span style={{ fontSize:12, color:'var(--text-2)' }}>{group.date} · {group.items.length}品目</span>
                     {group.items[0]?.invoice_no && (
-                      <span style={{ fontSize:11, color:'var(--text-2)', marginLeft:8, background:'var(--bg-2)', padding:'2px 7px', borderRadius:6, border:'1px solid var(--border)' }}>
+                      <span style={{ fontSize:11, color:'var(--text-2)', background:'var(--bg-2)', padding:'2px 7px', borderRadius:6, border:'1px solid var(--border)' }}>
                         # {group.items[0].invoice_no}
                       </span>
                     )}
                     {group.items[0]?.location && (
-                      <span style={{ fontSize:11, color:'white', marginLeft:6, background:'#D85A30', padding:'2px 7px', borderRadius:6 }}>
+                      <span style={{ fontSize:11, color:'white', background:'#D85A30', padding:'2px 7px', borderRadius:6 }}>
                         {group.items[0].location}店
                       </span>
                     )}
