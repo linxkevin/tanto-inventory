@@ -1032,6 +1032,79 @@ app.delete('/api/orders/:id', async (req, res) => {
 
 
 
+
+// ── LINE通知 ──────────────────────────────────────────
+async function sendLineMessage(message) {
+  const token = process.env.LINE_CHANNEL_ACCESS_TOKEN;
+  const userId = process.env.LINE_USER_ID;
+  if (!token || !userId) { console.log('LINE not configured'); return; }
+  try {
+    const r = await fetch('https://api.line.me/v2/bot/message/push', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ to: userId, messages: [{ type: 'text', text: message }] })
+    });
+    const data = await r.json();
+    console.log('LINE sent:', data.message || 'OK');
+  } catch(err) {
+    console.error('LINE error:', err.message);
+  }
+}
+
+// ── 棚卸し後の発注アラートLINE送信 ──────────────────
+app.post('/api/sessions/:id/notify', async (req, res) => {
+  try {
+    const sessionId = req.params.id;
+    
+    // セッション情報取得
+    const { rows: [session] } = await pool.query(
+      'SELECT * FROM sessions WHERE id=$1', [sessionId]
+    );
+    if (!session) return res.status(404).json({ error: 'not found' });
+
+    // 発注必要アイテムを取得
+    const { rows: items } = await pool.query(`
+      SELECT si.current_stock, i.name_ja, i.min_stock, i.vendor, i.unit
+      FROM session_items si
+      JOIN items i ON si.item_id = i.id
+      WHERE si.session_id = $1
+      AND i.active = true
+      AND i.min_stock > 0
+      AND (i.min_stock - COALESCE(si.current_stock, 0)) > 0
+      ORDER BY i.vendor, i.name_ja
+    `, [sessionId]);
+
+    if (items.length === 0) {
+      await sendLineMessage(`✅ 棚卸し完了 - ${session.location}店\n発注が必要なアイテムはありません！`);
+      return res.json({ ok: true, message: '発注不要' });
+    }
+
+    // 業者別にグループ化
+    const vendorMap = {};
+    items.forEach(it => {
+      const v = it.vendor || 'その他';
+      if (!vendorMap[v]) vendorMap[v] = [];
+      const shortage = it.min_stock - (it.current_stock || 0);
+      vendorMap[v].push(`・${it.name_ja}: ${shortage}${it.unit}不足（現${it.current_stock || 0}/${it.min_stock}）`);
+    });
+
+    // LINEメッセージ作成
+    let msg = `📦 発注アラート - ${session.location}店\n`;
+    msg += `棚卸し: ${session.date} ${session.time}\n`;
+    msg += `${'─'.repeat(20)}\n`;
+    Object.entries(vendorMap).forEach(([vendor, list]) => {
+      msg += `\n【${vendor}】\n${list.join('\n')}\n`;
+    });
+    msg += `\n${'─'.repeat(20)}\n合計 ${items.length}品目の発注が必要です`;
+
+    await sendLineMessage(msg);
+    res.json({ ok: true, count: items.length });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── Auto Matching API ─────────────────────────────────
 // 納品品名から棚卸しアイテムの候補を返す
 app.post('/api/deliveries/match', async (req, res) => {

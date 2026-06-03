@@ -354,8 +354,33 @@ function StaffTab({ lang, t, items, location, adminEmail, categories: catProp, o
           <i className="ti ti-mail" aria-hidden="true" style={{fontSize:16}} />
           {lang==='en'?'Notify Manager via Gmail':lang==='zh'?'通过 Gmail 通知管理员':'管理者へGmailで通知する'}
         </button>
-        <div style={{fontSize:11,color:'var(--text-2)',marginBottom:'1.5rem'}}>
+        <div style={{fontSize:11,color:'var(--text-2)',marginBottom:10}}>
           {lang==='en'?'Gmail opens with the notification pre-filled. Enter the manager email and send.':lang==='zh'?'Gmail 将自动填写通知内容，输入管理员邮箱后发送即可。':'Gmailが開きます。管理者のメールアドレスを入力して送信してください。'}
+        </div>
+
+        {/* LINE発注アラート */}
+        <button
+          onClick={async () => {
+            try {
+              const BASE = process.env.REACT_APP_API_URL || 'http://localhost:3001';
+              const sessions = await fetch(`${BASE}/api/sessions?location=${encodeURIComponent(completedInfo.location)}`).then(r=>r.json());
+              if (!sessions.length) { showToast('セッションが見つかりません'); return; }
+              const latestId = sessions[0].id;
+              const res = await fetch(`${BASE}/api/sessions/${latestId}/notify`, { method: 'POST' });
+              const data = await res.json();
+              if (data.ok) {
+                showToast(data.count > 0 ? `📱 LINE送信完了！${data.count}品目の発注アラートを送信しました` : '✅ LINE送信完了！発注不要です');
+              }
+            } catch(e) {
+              showToast('❌ LINE送信エラー: ' + e.message);
+            }
+          }}
+          style={{width:'100%',padding:'14px',background:'#06C755',color:'white',border:'none',borderRadius:'var(--radius-sm)',fontSize:14,fontWeight:500,cursor:'pointer',marginBottom:10,display:'flex',alignItems:'center',justifyContent:'center',gap:8}}
+        >
+          📱 {lang==='en'?'Send Order Alert via LINE':lang==='zh'?'通过LINE发送发单提醒':'LINEで発注アラートを送信'}
+        </button>
+        <div style={{fontSize:11,color:'var(--text-2)',marginBottom:'1.5rem'}}>
+          {lang==='en'?'Sends order-needed items to LINE.':'発注が必要なアイテムをLINEで通知します。'}
         </div>
 
         <button
