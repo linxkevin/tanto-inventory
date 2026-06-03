@@ -346,7 +346,8 @@ function StaffTab({ lang, t, items, location, adminEmail, categories: catProp, o
           </div>
         </div>
 
-        {/* Notify button */}
+        {/* Notify button - Gmail (非表示中) */}
+        {false && (
         <button
           onClick={openNotifyGmail}
           style={{width:'100%',padding:'14px',background:'#D85A30',color:'white',border:'none',borderRadius:'var(--radius-sm)',fontSize:14,fontWeight:500,cursor:'pointer',marginBottom:10,display:'flex',alignItems:'center',justifyContent:'center',gap:8}}
@@ -354,9 +355,7 @@ function StaffTab({ lang, t, items, location, adminEmail, categories: catProp, o
           <i className="ti ti-mail" aria-hidden="true" style={{fontSize:16}} />
           {lang==='en'?'Notify Manager via Gmail':lang==='zh'?'通过 Gmail 通知管理员':'管理者へGmailで通知する'}
         </button>
-        <div style={{fontSize:11,color:'var(--text-2)',marginBottom:10}}>
-          {lang==='en'?'Gmail opens with the notification pre-filled. Enter the manager email and send.':lang==='zh'?'Gmail 将自动填写通知内容，输入管理员邮箱后发送即可。':'Gmailが開きます。管理者のメールアドレスを入力して送信してください。'}
-        </div>
+        )}
 
         {/* LINE発注アラート */}
         <button
