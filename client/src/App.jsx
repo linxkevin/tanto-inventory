@@ -2344,7 +2344,7 @@ function ReceiptTab({ lang, t, showToast, location }) {
 
       {/* ── 履歴タブ ── */}
       {historyTab === 'history' && (
-        <DeliveryHistory history={history} deleteItem={deleteItem} deleteGroup={deleteGroup} />
+        <DeliveryHistory history={history} deleteItem={deleteItem} deleteGroup={deleteGroup} onReload={loadHistory} />
       )}
     </div>
   );
@@ -3270,7 +3270,7 @@ function EditableVendor({ group, onSave }) {
   );
 }
 
-function DeliveryHistory({ history, deleteItem, deleteGroup }) {
+function DeliveryHistory({ history, deleteItem, deleteGroup, onReload }) {
   const [selectedMonth, setSelectedMonth] = useState('');
   const [selectedVendor, setSelectedVendor] = useState('');
   const [viewMode, setViewMode] = useState('log'); // log | summary
@@ -3454,7 +3454,7 @@ function DeliveryHistory({ history, deleteItem, deleteGroup }) {
                           body: JSON.stringify({ ...it, vendor: newVendor })
                         })
                       ));
-                      loadHistory();
+                      if (onReload) onReload();
                     }} />
                     <span style={{ fontSize:12, color:'var(--text-2)' }}>{group.date} · {group.items.length}品目</span>
                     {group.items[0]?.invoice_no && (
