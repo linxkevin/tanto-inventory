@@ -3148,39 +3148,20 @@ function SummaryView({ orders }) {
 function StockTab({ lang, location }) {
   const [stocks, setStocks] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState('all'); // all | low | order
-  const [categoryFilter, setCategoryFilter] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState(null);
+  const [filter, setFilter] = useState('all');
   const [searchWord, setSearchWord] = useState('');
 
-  useEffect(() => {
-    loadStock();
-  }, [location]);
+  useEffect(() => { loadStock(); }, [location]);
 
   const loadStock = async () => {
     setLoading(true);
     try {
       const data = await api.getStock(location);
       setStocks(data);
-    } catch(e) {
-      console.error(e);
-    } finally {
-      setLoading(false);
-    }
+    } catch(e) { console.error(e); }
+    finally { setLoading(false); }
   };
-
-  const categories = [...new Set(stocks.map(s => s.category).filter(Boolean))].sort();
-
-  const filtered = stocks.filter(s => {
-    const cur = parseFloat(s.current_stock) || 0;
-    const min = parseFloat(s.min_stock) || 0;
-    const matchFilter = filter === 'all' ? true
-      : filter === 'low' ? (cur < min && cur >= min * 0.5)
-      : filter === 'order' ? cur < min * 0.5
-      : true;
-    const matchCat = !categoryFilter || s.category === categoryFilter;
-    const matchSearch = !searchWord || s.name_ja.toLowerCase().includes(searchWord.toLowerCase()) || (s.name_en||'').toLowerCase().includes(searchWord.toLowerCase());
-    return matchFilter && matchCat && matchSearch;
-  });
 
   const getStatus = (cur, min) => {
     if (min <= 0) return 'ok';
@@ -3193,104 +3174,143 @@ function StockTab({ lang, location }) {
   const statusLabel = { ok: 'OK', low: '残り少', order: '発注必要' };
   const statusBg = { ok: '#f0fdf4', low: '#fffbeb', order: '#fef2f2' };
 
-  const counts = {
-    all: stocks.length,
-    low: stocks.filter(s => { const c=parseFloat(s.current_stock)||0; const m=parseFloat(s.min_stock)||0; return c<m && c>=m*0.5; }).length,
-    order: stocks.filter(s => { const c=parseFloat(s.current_stock)||0; const m=parseFloat(s.min_stock)||0; return c<m*0.5; }).length,
+  const CAT_ICONS = {
+    '肉・海鮮':'🥩','野菜':'🥬','卵':'🥚','麺・米':'🍜','調味料':'🧂',
+    '乾物・ストック':'📦','冷凍・その他':'❄️','サーバー':'🍺','消耗品':'🧻','キッチン備品':'🔪'
   };
+
+  const categories = [...new Set(stocks.map(s => s.category).filter(Boolean))].sort();
+
+  // カテゴリー別集計
+  const catStats = categories.map(cat => {
+    const items = stocks.filter(s => s.category === cat);
+    const orderCount = items.filter(s => getStatus(parseFloat(s.current_stock)||0, parseFloat(s.min_stock)||0) === 'order').length;
+    const lowCount = items.filter(s => getStatus(parseFloat(s.current_stock)||0, parseFloat(s.min_stock)||0) === 'low').length;
+    return { cat, items: items.length, orderCount, lowCount };
+  });
+
+  const filteredItems = stocks.filter(s => {
+    const cur = parseFloat(s.current_stock) || 0;
+    const min = parseFloat(s.min_stock) || 0;
+    const matchCat = !selectedCategory || s.category === selectedCategory;
+    const matchFilter = filter === 'all' ? true : filter === 'low' ? getStatus(cur,min)==='low' : getStatus(cur,min)==='order';
+    const matchSearch = !searchWord || s.name_ja.toLowerCase().includes(searchWord.toLowerCase()) || (s.name_en||'').toLowerCase().includes(searchWord.toLowerCase());
+    return matchCat && matchFilter && matchSearch;
+  });
+
+  const totalCounts = {
+    all: stocks.length,
+    low: stocks.filter(s => getStatus(parseFloat(s.current_stock)||0, parseFloat(s.min_stock)||0)==='low').length,
+    order: stocks.filter(s => getStatus(parseFloat(s.current_stock)||0, parseFloat(s.min_stock)||0)==='order').length,
+  };
+
+  if (loading) return <div style={{textAlign:'center',padding:'40px 0',color:'var(--text-2)'}}>読み込み中...</div>;
 
   return (
     <div style={{ paddingBottom:80 }}>
-      {/* フィルター */}
-      <div style={{ display:'flex', gap:6, marginBottom:10, overflowX:'auto' }}>
+      {/* サマリーカード */}
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8, marginBottom:16 }}>
         {[
-          { key:'all', label:`全て (${counts.all})`, color:'#2C3E50' },
-          { key:'low', label:`⚠️ 残り少 (${counts.low})`, color:'#f59e0b' },
-          { key:'order', label:`🔴 発注必要 (${counts.order})`, color:'#ef4444' },
+          { key:'all', label:'全アイテム', count:totalCounts.all, color:'#2C3E50', bg:'#f8f9fa' },
+          { key:'low', label:'⚠️ 残り少', count:totalCounts.low, color:'#f59e0b', bg:'#fffbeb' },
+          { key:'order', label:'🔴 発注必要', count:totalCounts.order, color:'#ef4444', bg:'#fef2f2' },
         ].map(f => (
-          <button key={f.key} onClick={() => setFilter(f.key)}
-            style={{ padding:'6px 14px', borderRadius:20, border:'1px solid var(--border)', whiteSpace:'nowrap', fontSize:12, cursor:'pointer',
-              background: filter===f.key ? f.color : 'var(--bg-2)',
-              color: filter===f.key ? 'white' : 'var(--text-2)',
-              fontWeight: filter===f.key ? 600 : 400 }}>
-            {f.label}
-          </button>
+          <div key={f.key} onClick={() => { setFilter(f.key); setSelectedCategory(null); }}
+            style={{ background:filter===f.key?f.color:f.bg, borderRadius:10, padding:'12px 8px', textAlign:'center', cursor:'pointer', border:`1px solid ${f.color}30` }}>
+            <div style={{ fontSize:22, fontWeight:700, color:filter===f.key?'white':f.color }}>{f.count}</div>
+            <div style={{ fontSize:11, color:filter===f.key?'white':f.color, marginTop:2 }}>{f.label}</div>
+          </div>
         ))}
       </div>
 
-      {/* カテゴリーフィルター */}
-      <div style={{ display:'flex', gap:6, marginBottom:10, overflowX:'auto' }}>
-        <button onClick={() => setCategoryFilter('')}
-          style={{ padding:'5px 12px', borderRadius:20, border:'1px solid var(--border)', whiteSpace:'nowrap', fontSize:11, cursor:'pointer',
-            background: !categoryFilter ? '#D85A30' : 'var(--bg-2)', color: !categoryFilter ? 'white' : 'var(--text-2)' }}>
-          全カテゴリー
-        </button>
-        {categories.map(cat => (
-          <button key={cat} onClick={() => setCategoryFilter(cat)}
-            style={{ padding:'5px 12px', borderRadius:20, border:'1px solid var(--border)', whiteSpace:'nowrap', fontSize:11, cursor:'pointer',
-              background: categoryFilter===cat ? '#D85A30' : 'var(--bg-2)', color: categoryFilter===cat ? 'white' : 'var(--text-2)' }}>
-            {cat}
-          </button>
-        ))}
-      </div>
-
-      {/* 検索 */}
-      <input
-        value={searchWord}
-        onChange={e => setSearchWord(e.target.value)}
-        placeholder="アイテムを検索..."
-        style={{ width:'100%', padding:'8px 12px', borderRadius:8, border:'1px solid var(--border)', background:'var(--bg)', color:'var(--text-1)', fontSize:13, marginBottom:12, boxSizing:'border-box' }}
-      />
-
-      {/* 更新ボタン */}
-      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
-        <div style={{ fontSize:12, color:'var(--text-2)' }}>{filtered.length}件表示</div>
-        <button onClick={loadStock}
-          style={{ padding:'6px 14px', borderRadius:8, border:'1px solid var(--border)', background:'var(--bg)', fontSize:12, cursor:'pointer', color:'var(--text-1)' }}>
-          🔄 更新
-        </button>
-      </div>
-
-      {loading ? (
-        <div style={{ textAlign:'center', padding:'40px 0', color:'var(--text-2)' }}>読み込み中...</div>
-      ) : filtered.length === 0 ? (
-        <div style={{ textAlign:'center', padding:'40px 0', color:'var(--text-2)' }}>該当なし</div>
-      ) : (
-        <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
-          {filtered.map(item => {
-            const cur = parseFloat(item.current_stock) || 0;
-            const min = parseFloat(item.min_stock) || 0;
-            const status = getStatus(cur, min);
-            const pct = min > 0 ? Math.min(100, (cur / min) * 100) : 100;
-            return (
-              <div key={item.id} style={{ background:'var(--bg)', borderRadius:10, border:`1px solid ${statusColor[status]}40`, padding:'10px 14px' }}>
-                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:6 }}>
-                  <div>
-                    <span style={{ fontWeight:600, fontSize:14, color:'var(--text-1)' }}>{item.name_ja}</span>
-                    <span style={{ fontSize:11, color:'var(--text-2)', marginLeft:8 }}>{item.vendor}</span>
-                  </div>
-                  <span style={{ fontSize:11, fontWeight:600, padding:'2px 8px', borderRadius:10, background:statusBg[status], color:statusColor[status] }}>
-                    {statusLabel[status]}
-                  </span>
-                </div>
-                <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-                  <div style={{ flex:1, height:6, background:'var(--bg-2)', borderRadius:3, overflow:'hidden' }}>
-                    <div style={{ width:`${pct}%`, height:'100%', background:statusColor[status], borderRadius:3, transition:'width 0.3s' }} />
-                  </div>
-                  <div style={{ fontSize:13, color:'var(--text-1)', whiteSpace:'nowrap' }}>
-                    <strong style={{ color:statusColor[status] }}>{cur}</strong>
-                    <span style={{ color:'var(--text-2)' }}> / {min} {item.unit}</span>
-                  </div>
-                </div>
-                {item.delivered_since > 0 && (
-                  <div style={{ fontSize:11, color:'var(--text-2)', marginTop:4 }}>
-                    📦 棚卸し後 +{item.delivered_since}{item.unit} 入荷
+      {/* カテゴリータイル */}
+      {!selectedCategory ? (
+        <>
+          <div style={{ fontSize:12, color:'var(--text-2)', marginBottom:8, fontWeight:500 }}>カテゴリーを選択</div>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:16 }}>
+            {catStats.map(({cat, items, orderCount, lowCount}) => (
+              <div key={cat} onClick={() => setSelectedCategory(cat)}
+                style={{ background:'var(--bg-2)', borderRadius:12, padding:'14px', cursor:'pointer',
+                  border:`1px solid ${orderCount>0?'#ef444440':lowCount>0?'#f59e0b40':'var(--border)'}`,
+                  borderLeft:`4px solid ${orderCount>0?'#ef4444':lowCount>0?'#f59e0b':'#22c55e'}` }}>
+                <div style={{ fontSize:22, marginBottom:4 }}>{CAT_ICONS[cat]||'📋'}</div>
+                <div style={{ fontWeight:600, fontSize:14, color:'var(--text-1)', marginBottom:4 }}>{cat}</div>
+                <div style={{ fontSize:11, color:'var(--text-2)' }}>{items}品目</div>
+                {(orderCount > 0 || lowCount > 0) && (
+                  <div style={{ marginTop:6, display:'flex', gap:4, flexWrap:'wrap' }}>
+                    {orderCount > 0 && <span style={{ fontSize:10, background:'#fef2f2', color:'#ef4444', padding:'1px 6px', borderRadius:10 }}>🔴 {orderCount}</span>}
+                    {lowCount > 0 && <span style={{ fontSize:10, background:'#fffbeb', color:'#f59e0b', padding:'1px 6px', borderRadius:10 }}>⚠️ {lowCount}</span>}
                   </div>
                 )}
               </div>
-            );
-          })}
-        </div>
+            ))}
+          </div>
+        </>
+      ) : (
+        <>
+          {/* カテゴリー詳細 */}
+          <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:12 }}>
+            <button onClick={() => setSelectedCategory(null)}
+              style={{ padding:'6px 12px', borderRadius:8, border:'1px solid var(--border)', background:'var(--bg)', fontSize:12, cursor:'pointer' }}>
+              ← 戻る
+            </button>
+            <div style={{ fontWeight:600, fontSize:15 }}>{CAT_ICONS[selectedCategory]||'📋'} {selectedCategory}</div>
+            <div style={{ display:'flex', gap:4, marginLeft:'auto' }}>
+              {['all','low','order'].map(f => (
+                <button key={f} onClick={() => setFilter(f)}
+                  style={{ padding:'4px 10px', borderRadius:16, border:'none', fontSize:11, cursor:'pointer',
+                    background: filter===f ? '#D85A30' : 'var(--bg-2)',
+                    color: filter===f ? 'white' : 'var(--text-2)' }}>
+                  {f==='all'?'全て':f==='low'?'残り少':'発注必要'}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* 検索 */}
+          <input value={searchWord} onChange={e => setSearchWord(e.target.value)}
+            placeholder="アイテムを検索..."
+            style={{ width:'100%', padding:'8px 12px', borderRadius:8, border:'1px solid var(--border)', background:'var(--bg)', color:'var(--text-1)', fontSize:13, marginBottom:10, boxSizing:'border-box' }} />
+
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
+            <div style={{ fontSize:12, color:'var(--text-2)' }}>{filteredItems.length}件</div>
+            <button onClick={loadStock} style={{ padding:'5px 12px', borderRadius:8, border:'1px solid var(--border)', background:'var(--bg)', fontSize:12, cursor:'pointer' }}>🔄 更新</button>
+          </div>
+
+          <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+            {filteredItems.map(item => {
+              const cur = parseFloat(item.current_stock) || 0;
+              const min = parseFloat(item.min_stock) || 0;
+              const status = getStatus(cur, min);
+              const pct = min > 0 ? Math.min(100, (cur / min) * 100) : 100;
+              return (
+                <div key={item.id} style={{ background:'var(--bg)', borderRadius:10, border:`1px solid ${statusColor[status]}40`, padding:'10px 14px' }}>
+                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:6 }}>
+                    <div>
+                      <span style={{ fontWeight:600, fontSize:14, color:'var(--text-1)' }}>{item.name_ja}</span>
+                      <span style={{ fontSize:11, color:'var(--text-2)', marginLeft:8 }}>{item.vendor}</span>
+                    </div>
+                    <span style={{ fontSize:11, fontWeight:600, padding:'2px 8px', borderRadius:10, background:statusBg[status], color:statusColor[status] }}>
+                      {statusLabel[status]}
+                    </span>
+                  </div>
+                  <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                    <div style={{ flex:1, height:6, background:'var(--bg-2)', borderRadius:3, overflow:'hidden' }}>
+                      <div style={{ width:`${pct}%`, height:'100%', background:statusColor[status], borderRadius:3 }} />
+                    </div>
+                    <div style={{ fontSize:13, color:'var(--text-1)', whiteSpace:'nowrap' }}>
+                      <strong style={{ color:statusColor[status] }}>{cur}</strong>
+                      <span style={{ color:'var(--text-2)' }}> / {min} {item.unit}</span>
+                    </div>
+                  </div>
+                  {item.delivered_since > 0 && (
+                    <div style={{ fontSize:11, color:'var(--text-2)', marginTop:4 }}>📦 棚卸し後 +{item.delivered_since}{item.unit} 入荷</div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </>
       )}
     </div>
   );
