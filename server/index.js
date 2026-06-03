@@ -1365,6 +1365,12 @@ app.delete(`/api/deliveries/:id`, async (req, res) => {
 app.listen(PORT, async () => {
   console.log(`🚀 Server running on port ${PORT}`);
   await initDB();
+  try {
+    await pool.query(`ALTER TABLE items ADD COLUMN IF NOT EXISTS vendor_item_name TEXT DEFAULT ''`);
+    await pool.query(`ALTER TABLE items ADD COLUMN IF NOT EXISTS vendor_item_code TEXT DEFAULT ''`);
+    await pool.query(`ALTER TABLE items ADD COLUMN IF NOT EXISTS order_item_name TEXT DEFAULT ''`);
+    console.log('✅ items columns ensured');
+  } catch(e) { console.log('items columns:', e.message); }
   await seedItems();
   await seedCategories();
 });
