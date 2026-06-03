@@ -1068,8 +1068,8 @@ app.get('/api/stock', async (req, res) => {
 
     // 棚卸し後の納品を取得（突合済みのみ）
     const deliveryQuery = location
-      ? `SELECT vendor_item_name, vendor_item_code, SUM(quantity) as qty FROM deliveries WHERE delivered_date >= $1 AND location=$2 GROUP BY vendor_item_name, vendor_item_code`
-      : `SELECT vendor_item_name, vendor_item_code, SUM(quantity) as qty FROM deliveries WHERE delivered_date >= $1 GROUP BY vendor_item_name, vendor_item_code`;
+      ? `SELECT item_name, item_code, SUM(quantity) as qty FROM deliveries WHERE delivered_date >= $1 AND location=$2 GROUP BY item_name, item_code`
+      : `SELECT item_name, item_code, SUM(quantity) as qty FROM deliveries WHERE delivered_date >= $1 GROUP BY item_name, item_code`;
     const deliveryParams = location ? [latestSession.date, location] : [latestSession.date];
     const { rows: deliveries } = await pool.query(deliveryQuery, deliveryParams);
 
@@ -1077,8 +1077,8 @@ app.get('/api/stock', async (req, res) => {
     const result = items.map(item => {
       const lastStock = stockMap[item.id] || 0;
       const delivery = deliveries.find(d =>
-        (item.vendor_item_name && d.vendor_item_name && d.vendor_item_name.toLowerCase() === item.vendor_item_name.toLowerCase()) ||
-        (item.vendor_item_code && d.vendor_item_code && d.vendor_item_code.toLowerCase() === item.vendor_item_code.toLowerCase())
+        (item.vendor_item_name && d.item_name && d.item_name.toLowerCase() === item.vendor_item_name.toLowerCase()) ||
+        (item.vendor_item_code && d.item_code && d.item_code.toLowerCase() === item.vendor_item_code.toLowerCase())
       );
       const deliveredSince = delivery ? parseFloat(delivery.qty) || 0 : 0;
       return {
