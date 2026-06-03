@@ -2393,7 +2393,7 @@ function fileToBase64Resized(file, maxWidth = 1600, quality = 0.85) {
 
 // ── OrderTab ──────────────────────────────────────────
 // ── テストモード（6月1日以降はfalseに変更）──
-const TEST_MODE = true;
+const TEST_MODE = false;
 const TEST_EMAIL = 'sales@tanto-otabe.com';
 
 const VENDOR_MASTER = {
