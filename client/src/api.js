@@ -30,6 +30,7 @@ export const api = {
   getOrder:           (id)       => req('GET',   `/api/orders/${id}`),
   postOrder:          (data)     => req('POST',  '/api/orders', data),
   deleteOrder:        (id)       => req('DELETE', `/api/orders/${id}`),
+  getStock:           (location) => req('GET', '/api/stock' + (location ? `?location=${encodeURIComponent(location)}` : '')),
   getDeliveries:      (params)   => req('GET',   '/api/deliveries' + (params ? '?' + new URLSearchParams(params) : '')),
   postDeliveries:     (items)    => req('POST',  '/api/deliveries', { items }),
   patchDelivery:      (id, data) => req('PATCH', `/api/deliveries/${id}`, data),

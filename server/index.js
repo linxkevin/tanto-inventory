@@ -1033,6 +1033,70 @@ app.delete('/api/orders/:id', async (req, res) => {
 
 
 
+
+// ── Current Stock API ─────────────────────────────────
+// 現在庫 = 最後の棚卸し数 + 突合済み納品数
+app.get('/api/stock', async (req, res) => {
+  try {
+    const { location } = req.query;
+    const locationCond = location ? `AND s.location = '${location}'` : '';
+
+    const { rows } = await pool.query(`
+      SELECT 
+        i.id,
+        i.name_ja,
+        i.name_en,
+        i.unit,
+        i.min_stock,
+        i.vendor,
+        i.category,
+        i.vendor_item_name,
+        i.vendor_item_code,
+        COALESCE(si.current_stock, 0) as last_stock,
+        COALESCE(si.current_stock, 0) + COALESCE(d.delivered_qty, 0) as current_stock,
+        COALESCE(d.delivered_qty, 0) as delivered_since,
+        s.date as last_session_date,
+        s.location as last_session_location
+      FROM items i
+      LEFT JOIN (
+        SELECT si2.item_id, si2.current_stock, s2.id as session_id
+        FROM session_items si2
+        JOIN sessions s2 ON si2.session_id = s2.id
+        WHERE s2.id = (
+          SELECT s3.id FROM sessions s3
+          ${location ? `WHERE s3.location = '${location}'` : ''}
+          ORDER BY s3.created_at DESC LIMIT 1
+        )
+      ) si ON i.id = si.item_id
+      LEFT JOIN sessions s ON s.id = si.session_id
+      LEFT JOIN (
+        SELECT d2.vendor_item_name, d2.vendor_item_code, SUM(d2.quantity) as delivered_qty
+        FROM deliveries d2
+        JOIN sessions s4 ON (
+          s4.id = (
+            SELECT s5.id FROM sessions s5
+            ${location ? `WHERE s5.location = '${location}'` : ''}
+            ORDER BY s5.created_at DESC LIMIT 1
+          )
+        )
+        WHERE d2.delivered_date >= s4.date
+        ${location ? `AND d2.location = '${location}'` : ''}
+        GROUP BY d2.vendor_item_name, d2.vendor_item_code
+      ) d ON (
+        (i.vendor_item_name != '' AND LOWER(i.vendor_item_name) = LOWER(d.vendor_item_name))
+        OR (i.vendor_item_code != '' AND LOWER(i.vendor_item_code) = LOWER(d.vendor_item_code))
+      )
+      WHERE i.active = true
+      ORDER BY i.category, i.vendor, i.name_ja
+    `);
+
+    res.json(rows);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── LINE通知 ──────────────────────────────────────────
 async function sendLineMessage(message) {
   const token = process.env.LINE_CHANNEL_ACCESS_TOKEN;

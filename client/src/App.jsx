@@ -143,7 +143,7 @@ export default function App() {
         <ReceiptTab lang={lang} showToast={showToast} location={location} />
       )}
 
-      {location && ['admin','history','settings','order'].includes(tab) && (
+      {location && ['admin','history','settings','order','stock'].includes(tab) && (
         adminUnlocked
           ? <AdminArea
               lang={lang} t={t} items={items} sessions={sessions}
@@ -1868,6 +1868,7 @@ function AdminArea({ lang, t, items, sessions, location, activeTab, setActiveTab
   const subTabs = [
     { key:'order',    labelJa:'📋 発注',  labelEn:'📋 Order',    labelZh:'📋 发单' },
     { key:'admin',    labelJa:'📦 棚卸し', labelEn:'📦 Inventory', labelZh:'📦 盘点' },
+    { key:'stock',    labelJa:'📊 在庫',  labelEn:'📊 Stock',    labelZh:'📊 库存' },
     { key:'history',  labelJa:'履歴',     labelEn:'History',      labelZh:'历史' },
     { key:'settings', labelJa:'設定',     labelEn:'Settings',     labelZh:'设置' },
   ];
@@ -1903,6 +1904,10 @@ function AdminArea({ lang, t, items, sessions, location, activeTab, setActiveTab
       </div>
 
       {/* Sub-tab content */}
+      {currentTab === 'stock' && (
+        <StockTab lang={lang} location={location} />
+      )}
+
       {currentTab === 'order' && (
         <OrderTab lang={lang} t={t} items={items} showToast={showToast} location={location} sessions={sessions} />
       )}
@@ -3135,6 +3140,158 @@ function SummaryView({ orders }) {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+
+function StockTab({ lang, location }) {
+  const [stocks, setStocks] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState('all'); // all | low | order
+  const [categoryFilter, setCategoryFilter] = useState('');
+  const [searchWord, setSearchWord] = useState('');
+
+  useEffect(() => {
+    loadStock();
+  }, [location]);
+
+  const loadStock = async () => {
+    setLoading(true);
+    try {
+      const data = await api.getStock(location);
+      setStocks(data);
+    } catch(e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const categories = [...new Set(stocks.map(s => s.category).filter(Boolean))].sort();
+
+  const filtered = stocks.filter(s => {
+    const cur = parseFloat(s.current_stock) || 0;
+    const min = parseFloat(s.min_stock) || 0;
+    const matchFilter = filter === 'all' ? true
+      : filter === 'low' ? (cur < min && cur >= min * 0.5)
+      : filter === 'order' ? cur < min * 0.5
+      : true;
+    const matchCat = !categoryFilter || s.category === categoryFilter;
+    const matchSearch = !searchWord || s.name_ja.toLowerCase().includes(searchWord.toLowerCase()) || (s.name_en||'').toLowerCase().includes(searchWord.toLowerCase());
+    return matchFilter && matchCat && matchSearch;
+  });
+
+  const getStatus = (cur, min) => {
+    if (min <= 0) return 'ok';
+    if (cur < min * 0.5) return 'order';
+    if (cur < min) return 'low';
+    return 'ok';
+  };
+
+  const statusColor = { ok: '#22c55e', low: '#f59e0b', order: '#ef4444' };
+  const statusLabel = { ok: 'OK', low: '残り少', order: '発注必要' };
+  const statusBg = { ok: '#f0fdf4', low: '#fffbeb', order: '#fef2f2' };
+
+  const counts = {
+    all: stocks.length,
+    low: stocks.filter(s => { const c=parseFloat(s.current_stock)||0; const m=parseFloat(s.min_stock)||0; return c<m && c>=m*0.5; }).length,
+    order: stocks.filter(s => { const c=parseFloat(s.current_stock)||0; const m=parseFloat(s.min_stock)||0; return c<m*0.5; }).length,
+  };
+
+  return (
+    <div style={{ paddingBottom:80 }}>
+      {/* フィルター */}
+      <div style={{ display:'flex', gap:6, marginBottom:10, overflowX:'auto' }}>
+        {[
+          { key:'all', label:`全て (${counts.all})`, color:'#2C3E50' },
+          { key:'low', label:`⚠️ 残り少 (${counts.low})`, color:'#f59e0b' },
+          { key:'order', label:`🔴 発注必要 (${counts.order})`, color:'#ef4444' },
+        ].map(f => (
+          <button key={f.key} onClick={() => setFilter(f.key)}
+            style={{ padding:'6px 14px', borderRadius:20, border:'1px solid var(--border)', whiteSpace:'nowrap', fontSize:12, cursor:'pointer',
+              background: filter===f.key ? f.color : 'var(--bg-2)',
+              color: filter===f.key ? 'white' : 'var(--text-2)',
+              fontWeight: filter===f.key ? 600 : 400 }}>
+            {f.label}
+          </button>
+        ))}
+      </div>
+
+      {/* カテゴリーフィルター */}
+      <div style={{ display:'flex', gap:6, marginBottom:10, overflowX:'auto' }}>
+        <button onClick={() => setCategoryFilter('')}
+          style={{ padding:'5px 12px', borderRadius:20, border:'1px solid var(--border)', whiteSpace:'nowrap', fontSize:11, cursor:'pointer',
+            background: !categoryFilter ? '#D85A30' : 'var(--bg-2)', color: !categoryFilter ? 'white' : 'var(--text-2)' }}>
+          全カテゴリー
+        </button>
+        {categories.map(cat => (
+          <button key={cat} onClick={() => setCategoryFilter(cat)}
+            style={{ padding:'5px 12px', borderRadius:20, border:'1px solid var(--border)', whiteSpace:'nowrap', fontSize:11, cursor:'pointer',
+              background: categoryFilter===cat ? '#D85A30' : 'var(--bg-2)', color: categoryFilter===cat ? 'white' : 'var(--text-2)' }}>
+            {cat}
+          </button>
+        ))}
+      </div>
+
+      {/* 検索 */}
+      <input
+        value={searchWord}
+        onChange={e => setSearchWord(e.target.value)}
+        placeholder="アイテムを検索..."
+        style={{ width:'100%', padding:'8px 12px', borderRadius:8, border:'1px solid var(--border)', background:'var(--bg)', color:'var(--text-1)', fontSize:13, marginBottom:12, boxSizing:'border-box' }}
+      />
+
+      {/* 更新ボタン */}
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
+        <div style={{ fontSize:12, color:'var(--text-2)' }}>{filtered.length}件表示</div>
+        <button onClick={loadStock}
+          style={{ padding:'6px 14px', borderRadius:8, border:'1px solid var(--border)', background:'var(--bg)', fontSize:12, cursor:'pointer', color:'var(--text-1)' }}>
+          🔄 更新
+        </button>
+      </div>
+
+      {loading ? (
+        <div style={{ textAlign:'center', padding:'40px 0', color:'var(--text-2)' }}>読み込み中...</div>
+      ) : filtered.length === 0 ? (
+        <div style={{ textAlign:'center', padding:'40px 0', color:'var(--text-2)' }}>該当なし</div>
+      ) : (
+        <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+          {filtered.map(item => {
+            const cur = parseFloat(item.current_stock) || 0;
+            const min = parseFloat(item.min_stock) || 0;
+            const status = getStatus(cur, min);
+            const pct = min > 0 ? Math.min(100, (cur / min) * 100) : 100;
+            return (
+              <div key={item.id} style={{ background:'var(--bg)', borderRadius:10, border:`1px solid ${statusColor[status]}40`, padding:'10px 14px' }}>
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:6 }}>
+                  <div>
+                    <span style={{ fontWeight:600, fontSize:14, color:'var(--text-1)' }}>{item.name_ja}</span>
+                    <span style={{ fontSize:11, color:'var(--text-2)', marginLeft:8 }}>{item.vendor}</span>
+                  </div>
+                  <span style={{ fontSize:11, fontWeight:600, padding:'2px 8px', borderRadius:10, background:statusBg[status], color:statusColor[status] }}>
+                    {statusLabel[status]}
+                  </span>
+                </div>
+                <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                  <div style={{ flex:1, height:6, background:'var(--bg-2)', borderRadius:3, overflow:'hidden' }}>
+                    <div style={{ width:`${pct}%`, height:'100%', background:statusColor[status], borderRadius:3, transition:'width 0.3s' }} />
+                  </div>
+                  <div style={{ fontSize:13, color:'var(--text-1)', whiteSpace:'nowrap' }}>
+                    <strong style={{ color:statusColor[status] }}>{cur}</strong>
+                    <span style={{ color:'var(--text-2)' }}> / {min} {item.unit}</span>
+                  </div>
+                </div>
+                {item.delivered_since > 0 && (
+                  <div style={{ fontSize:11, color:'var(--text-2)', marginTop:4 }}>
+                    📦 棚卸し後 +{item.delivered_since}{item.unit} 入荷
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
