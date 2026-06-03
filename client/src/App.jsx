@@ -1917,6 +1917,7 @@ function ReceiptTab({ lang, t, showToast, location }) {
   const [imageUrl, setImageUrl]   = useState('');
   const [analyzing, setAnalyzing] = useState(false);
   const [rows, setRows]           = useState([]);
+  const [matchingSuggestions, setMatchingSuggestions] = useState([]);
   const [footer, setFooter]       = useState({ invoice_no: '', subtotal: '', tax_amount: '', total: '' });
   const [saving, setSaving]       = useState(false);
   const [history, setHistory]     = useState([]);
@@ -2009,6 +2010,22 @@ function ReceiptTab({ lang, t, showToast, location }) {
         tax_amount: parsed.tax_amount != null ? String(parsed.tax_amount) : '',
         total: parsed.total != null ? String(parsed.total) : '',
       });
+
+      // 各品目のマッチング候補を取得
+      const BASE = process.env.REACT_APP_API_URL || 'http://localhost:3001';
+      const matchResults = await Promise.all(newRows.map(async row => {
+        try {
+          const res = await fetch(`${BASE}/api/deliveries/match`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ item_name: row.item_name, item_code: row.item_code })
+          });
+          const data = await res.json();
+          return { id: row.id, matched: data.matched, candidates: data.items || [] };
+        } catch { return { id: row.id, matched: false, candidates: [] }; }
+      }));
+      setMatchingSuggestions(matchResults);
+
       setRows(newRows);
       setStep('review');
     } catch (err) {
@@ -2272,6 +2289,45 @@ function ReceiptTab({ lang, t, showToast, location }) {
                 </div>
               )}
 
+              {/* マッチング候補 */}
+              {matchingSuggestions.some(m => !m.matched && m.candidates.length > 0) && (
+                <div style={{ marginTop:12, padding:'12px 14px', background:'rgba(216,90,48,0.05)', borderRadius:10, border:'1px solid rgba(216,90,48,0.2)' }}>
+                  <div style={{ fontSize:12, fontWeight:600, color:'#D85A30', marginBottom:10 }}>🔗 突合候補（タップで紐付け）</div>
+                  {matchingSuggestions.filter(m => !m.matched && m.candidates.length > 0).map(m => {
+                    const row = rows.find(r => r.id === m.id);
+                    if (!row) return null;
+                    return (
+                      <div key={m.id} style={{ marginBottom:10, paddingBottom:10, borderBottom:'1px solid var(--border)' }}>
+                        <div style={{ fontSize:12, color:'var(--text-2)', marginBottom:6 }}>
+                          📦 <strong style={{color:'var(--text-1)'}}>{row.item_name}</strong> の突合候補:
+                        </div>
+                        <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
+                          {m.candidates.map(c => (
+                            <button key={c.id} onClick={async () => {
+                              const BASE = process.env.REACT_APP_API_URL || 'http://localhost:3001';
+                              await fetch('/api/items/match-bulk', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ matches: [{ item_id: c.id, vendor_item_name: row.item_name, vendor_item_code: row.item_code }] })
+                              });
+                              setMatchingSuggestions(prev => prev.map(s => s.id === m.id ? {...s, matched: true} : s));
+                              showToast(`✅ ${row.item_name} → ${c.name_ja} に紐付けました`);
+                            }}
+                              style={{ padding:'5px 12px', borderRadius:20, border:'1px solid #D85A30', background:'white', color:'#D85A30', fontSize:12, cursor:'pointer' }}>
+                              {c.name_ja}
+                            </button>
+                          ))}
+                          <button onClick={() => setMatchingSuggestions(prev => prev.map(s => s.id === m.id ? {...s, matched: true} : s))}
+                            style={{ padding:'5px 12px', borderRadius:20, border:'1px solid var(--border)', background:'transparent', color:'var(--text-2)', fontSize:12, cursor:'pointer' }}>
+                            スキップ
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
               {/* 伝票フッター */}
               <div style={{ marginTop:12, padding:'12px 14px', background:'var(--bg-2)', borderRadius:10, border:'1px solid var(--border)' }}>
                 <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr 1fr', gap:10 }}>
@@ -2308,7 +2364,7 @@ function ReceiptTab({ lang, t, showToast, location }) {
               </div>
 
               {/* 別の伝票 */}
-              <button onClick={() => { setStep('capture'); setImageUrl(''); setImageFile(null); setRows([]); setFooter({ invoice_no: '', subtotal: '', tax_amount: '', total: '' }); }}
+              <button onClick={() => { setStep('capture'); setImageUrl(''); setImageFile(null); setRows([]); setFooter({ invoice_no: '', subtotal: '', tax_amount: '', total: '' }); setMatchingSuggestions([]); }}
                 style={{ width:'100%', marginTop:10, padding:'10px 0', borderRadius:10, border:'1px solid var(--border)', background:'transparent', color:'var(--text-2)', fontSize:13, cursor:'pointer' }}>
                 {l('retry')}
               </button>
@@ -2320,7 +2376,7 @@ function ReceiptTab({ lang, t, showToast, location }) {
             <div style={{ textAlign:'center', padding:'40px 0' }}>
               <div style={{ fontSize:48, marginBottom:12 }}>✅</div>
               <div style={{ fontSize:16, fontWeight:600, color:'var(--text-1)', marginBottom:24 }}>{l('saved')}</div>
-              <button onClick={() => { setStep('capture'); setImageUrl(''); setImageFile(null); setRows([]); setFooter({ invoice_no: '', subtotal: '', tax_amount: '', total: '' }); }}
+              <button onClick={() => { setStep('capture'); setImageUrl(''); setImageFile(null); setRows([]); setFooter({ invoice_no: '', subtotal: '', tax_amount: '', total: '' }); setMatchingSuggestions([]); }}
                 style={{ padding:'12px 32px', borderRadius:10, border:'none', background:'#D85A30', color:'white', fontSize:14, fontWeight:600, cursor:'pointer' }}>
                 {l('retry')}
               </button>

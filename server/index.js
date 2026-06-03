@@ -1031,6 +1031,67 @@ app.delete('/api/orders/:id', async (req, res) => {
 });
 
 
+
+// ── Auto Matching API ─────────────────────────────────
+// 納品品名から棚卸しアイテムの候補を返す
+app.post('/api/deliveries/match', async (req, res) => {
+  try {
+    const { item_name, item_code } = req.body;
+    if (!item_name) return res.json([]);
+
+    // 既存の突合情報から完全一致を探す
+    const { rows: exact } = await pool.query(`
+      SELECT id, name_ja, name_en, vendor, vendor_item_name, vendor_item_code, order_item_name
+      FROM items WHERE active = true
+      AND (
+        LOWER(vendor_item_name) = LOWER($1)
+        OR LOWER(vendor_item_code) = LOWER($2)
+      )
+      LIMIT 3
+    `, [item_name, item_code || '']);
+
+    if (exact.length > 0) return res.json({ matched: true, items: exact });
+
+    // 部分一致で候補を探す
+    const words = item_name.toLowerCase().split(/[\s_\-\/]+/).filter(w => w.length > 2);
+    if (words.length === 0) return res.json({ matched: false, items: [] });
+
+    const conditions = words.map((w, i) => 
+      `(LOWER(name_ja) LIKE $${i+1} OR LOWER(name_en) LIKE $${i+1} OR LOWER(vendor_item_name) LIKE $${i+1})`
+    ).join(' OR ');
+    const params = words.map(w => `%${w}%`);
+
+    const { rows: partial } = await pool.query(`
+      SELECT id, name_ja, name_en, vendor, vendor_item_name, vendor_item_code, order_item_name
+      FROM items WHERE active = true
+      AND (${conditions})
+      LIMIT 5
+    `, params);
+
+    res.json({ matched: false, items: partial });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// 突合情報を一括保存
+app.post('/api/items/match-bulk', async (req, res) => {
+  try {
+    const { matches } = req.body; // [{ item_id, vendor_item_name, vendor_item_code }]
+    const updated = [];
+    for (const m of matches) {
+      const { rows } = await pool.query(`
+        UPDATE items SET vendor_item_name=$1, vendor_item_code=$2
+        WHERE id=$3 RETURNING id, name_ja, vendor_item_name, vendor_item_code
+      `, [m.vendor_item_name, m.vendor_item_code || '', m.item_id]);
+      if (rows.length) updated.push(rows[0]);
+    }
+    res.json(updated);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── Apply Delivery to Stock ───────────────────────────
 // 納品データを棚卸し在庫に反映
 async function applyDeliveryToStock(delivery, location) {
