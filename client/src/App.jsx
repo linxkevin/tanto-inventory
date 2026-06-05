@@ -1947,6 +1947,7 @@ function ReceiptTab({ lang, t, showToast, location }) {
   const [analyzing, setAnalyzing] = useState(false);
   const [rows, setRows]           = useState([]);
   const [matchingSuggestions, setMatchingSuggestions] = useState([]);
+  const [manualSearchState, setManualSearchState] = useState({}); // { [rowId]: { open, query, results, loading } }
   const [footer, setFooter]       = useState({ invoice_no: '', subtotal: '', tax_amount: '', total: '' });
   const [saving, setSaving]       = useState(false);
   const [history, setHistory]     = useState([]);
@@ -2319,12 +2320,36 @@ function ReceiptTab({ lang, t, showToast, location }) {
               )}
 
               {/* マッチング候補 */}
-              {matchingSuggestions.some(m => !m.matched && m.candidates.length > 0) && (
+              {matchingSuggestions.some(m => !m.matched) && (
                 <div style={{ marginTop:12, padding:'12px 14px', background:'rgba(216,90,48,0.05)', borderRadius:10, border:'1px solid rgba(216,90,48,0.2)' }}>
                   <div style={{ fontSize:12, fontWeight:600, color:'#D85A30', marginBottom:10 }}>🔗 突合候補（タップで紐付け）</div>
-                  {matchingSuggestions.filter(m => !m.matched && m.candidates.length > 0).map(m => {
+                  {matchingSuggestions.filter(m => !m.matched).map(m => {
                     const row = rows.find(r => r.id === m.id);
                     if (!row) return null;
+                    const ms = manualSearchState[m.id] || {};
+                    const doManualSearch = async (q) => {
+                      if (!q.trim()) return;
+                      setManualSearchState(prev => ({...prev, [m.id]: {...(prev[m.id]||{}), loading:true, results:[]}}));
+                      try {
+                        const BASE = process.env.REACT_APP_API_URL || 'http://localhost:3001';
+                        const res = await fetch(`${BASE}/api/items?q=${encodeURIComponent(q)}&active=true`);
+                        const data = await res.json();
+                        setManualSearchState(prev => ({...prev, [m.id]: {...(prev[m.id]||{}), loading:false, results: data.slice(0,10)}}));
+                      } catch {
+                        setManualSearchState(prev => ({...prev, [m.id]: {...(prev[m.id]||{}), loading:false}}));
+                      }
+                    };
+                    const doLink = async (c) => {
+                      const BASE = process.env.REACT_APP_API_URL || 'http://localhost:3001';
+                      await fetch(`${BASE}/api/items/match-bulk`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ matches: [{ item_id: c.id, vendor_item_name: row.item_name, vendor_item_code: row.item_code }] })
+                      });
+                      setMatchingSuggestions(prev => prev.map(s => s.id === m.id ? {...s, matched: true} : s));
+                      setManualSearchState(prev => { const n={...prev}; delete n[m.id]; return n; });
+                      showToast(`✅ ${row.item_name} → ${c.name_ja} に紐付けました`);
+                    };
                     return (
                       <div key={m.id} style={{ marginBottom:10, paddingBottom:10, borderBottom:'1px solid var(--border)' }}>
                         <div style={{ fontSize:12, color:'var(--text-2)', marginBottom:6 }}>
@@ -2332,25 +2357,58 @@ function ReceiptTab({ lang, t, showToast, location }) {
                         </div>
                         <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
                           {m.candidates.map(c => (
-                            <button key={c.id} onClick={async () => {
-                              const BASE = process.env.REACT_APP_API_URL || 'http://localhost:3001';
-                              await fetch('/api/items/match-bulk', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ matches: [{ item_id: c.id, vendor_item_name: row.item_name, vendor_item_code: row.item_code }] })
-                              });
-                              setMatchingSuggestions(prev => prev.map(s => s.id === m.id ? {...s, matched: true} : s));
-                              showToast(`✅ ${row.item_name} → ${c.name_ja} に紐付けました`);
-                            }}
+                            <button key={c.id} onClick={() => doLink(c)}
                               style={{ padding:'5px 12px', borderRadius:20, border:'1px solid #D85A30', background:'white', color:'#D85A30', fontSize:12, cursor:'pointer' }}>
                               {c.name_ja}
                             </button>
                           ))}
+                          {/* 手動検索ボタン */}
+                          {!ms.open && (
+                            <button onClick={() => setManualSearchState(prev => ({...prev, [m.id]: { open:true, query: row.item_name, results:[], loading:false }}))}
+                              style={{ padding:'5px 12px', borderRadius:20, border:'1px solid #888', background:'transparent', color:'#555', fontSize:12, cursor:'pointer' }}>
+                              🔍 手動検索
+                            </button>
+                          )}
                           <button onClick={() => setMatchingSuggestions(prev => prev.map(s => s.id === m.id ? {...s, matched: true} : s))}
                             style={{ padding:'5px 12px', borderRadius:20, border:'1px solid var(--border)', background:'transparent', color:'var(--text-2)', fontSize:12, cursor:'pointer' }}>
                             スキップ
                           </button>
                         </div>
+                        {/* 手動検索UI */}
+                        {ms.open && (
+                          <div style={{ marginTop:8, padding:'10px 12px', background:'var(--bg)', borderRadius:8, border:'1px solid var(--border)' }}>
+                            <div style={{ display:'flex', gap:6, marginBottom:8 }}>
+                              <input
+                                value={ms.query || ''}
+                                onChange={e => setManualSearchState(prev => ({...prev, [m.id]: {...(prev[m.id]||{}), query: e.target.value}}))}
+                                onKeyDown={e => e.key === 'Enter' && doManualSearch(ms.query)}
+                                placeholder="アイテム名で検索..."
+                                style={{...inputStyle, flex:1, fontSize:13, padding:'6px 10px'}}
+                              />
+                              <button onClick={() => doManualSearch(ms.query)} disabled={ms.loading}
+                                style={{ padding:'6px 12px', borderRadius:8, border:'none', background:'#D85A30', color:'white', fontSize:12, cursor:'pointer', whiteSpace:'nowrap' }}>
+                                {ms.loading ? '検索中' : '検索'}
+                              </button>
+                              <button onClick={() => setManualSearchState(prev => { const n={...prev}; delete n[m.id]; return n; })}
+                                style={{ padding:'6px 10px', borderRadius:8, border:'1px solid var(--border)', background:'transparent', color:'var(--text-2)', fontSize:12, cursor:'pointer' }}>
+                                ✕
+                              </button>
+                            </div>
+                            {ms.results && ms.results.length > 0 && (
+                              <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
+                                {ms.results.map(c => (
+                                  <button key={c.id} onClick={() => doLink(c)}
+                                    style={{ padding:'5px 12px', borderRadius:20, border:'1px solid #D85A30', background:'white', color:'#D85A30', fontSize:12, cursor:'pointer' }}>
+                                    {c.name_ja}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                            {ms.results && ms.results.length === 0 && !ms.loading && ms.query && (
+                              <div style={{ fontSize:12, color:'var(--text-2)' }}>該当なし</div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     );
                   })}
