@@ -1942,8 +1942,8 @@ const VENDORS_ZH = ['Wismettac Asian Foods, Inc.','The Cherry Co., Ltd.','JFC In
 
 function ReceiptTab({ lang, t, showToast, location }) {
   const [step, setStep]           = useState('capture'); // capture | review | saved
-  const [imageFile, setImageFile] = useState(null);
-  const [imageUrl, setImageUrl]   = useState('');
+  const [imageFiles, setImageFiles] = useState([]); // 複数ファイル対応
+  const [imageUrl, setImageUrl]   = useState(''); // プレビュー用（1枚目）
   const [analyzing, setAnalyzing] = useState(false);
   const [rows, setRows]           = useState([]);
   const [matchingSuggestions, setMatchingSuggestions] = useState([]);
@@ -1987,76 +1987,84 @@ function ReceiptTab({ lang, t, showToast, location }) {
 
   // 画像選択
   const handleFileChange = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    setImageFile(file);
-    setImageUrl(URL.createObjectURL(file));
+    const files = Array.from(e.target.files);
+    if (!files.length) return;
+    setImageFiles(files);
+    setImageUrl(URL.createObjectURL(files[0]));
     setStep('capture');
     setRows([]);
   };
 
-  // AI解析
+  // AI解析（複数枚対応）
   const analyze = async () => {
-    if (!imageFile) return;
+    if (!imageFiles.length) return;
     setAnalyzing(true);
     try {
-      const base64 = await fileToBase64Resized(imageFile);
-      const mediaType = 'image/jpeg';
-
-      const _BASE = process.env.REACT_APP_API_URL || 'http://localhost:3001';
-      const response = await fetch(`${_BASE}/api/analyze-receipt`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ image: base64, mediaType: mediaType })
-      });
-
-      const data = await response.json();
-      const text = data.content?.find(c => c.type === 'text')?.text || '{}';
-      const clean = text.replace(/```json|```/g, '').trim();
-      const parsed = JSON.parse(clean);
-
+      const BASE = process.env.REACT_APP_API_URL || 'http://localhost:3001';
       const today = new Date().toISOString().slice(0,10);
-      const detectedVendor = parsed.vendor || '';
-      const detectedDate = parsed.delivered_date || today;
+      const allRows = [];
+      const allMatchResults = [];
+      let mergedFooter = { invoice_no: '', subtotal: '', tax_amount: '', total: '' };
 
-      const newRows = (parsed.items || []).map((it, i) => ({
-        id: Date.now() + i,
-        vendor: detectedVendor,
-        item_name: it.item_name || '',
-        item_code: it.item_code || '',
-        unit_price: it.unit_price !== null && it.unit_price !== undefined ? String(it.unit_price) : '',
-        quantity: it.quantity !== null && it.quantity !== undefined ? String(it.quantity) : '',
-        delivered_date: detectedDate,
-        note: it.note || '',
-      }));
+      // 1枚ずつ順番に解析
+      for (let fi = 0; fi < imageFiles.length; fi++) {
+        const file = imageFiles[fi];
+        const base64 = await fileToBase64Resized(file);
+        const response = await fetch(`${BASE}/api/analyze-receipt`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ image: base64, mediaType: 'image/jpeg' })
+        });
+        const data = await response.json();
+        const text = data.content?.find(c => c.type === 'text')?.text || '{}';
+        const clean = text.replace(/```json|```/g, '').trim();
+        const parsed = JSON.parse(clean);
 
-      if (newRows.length === 0) {
-        newRows.push(emptyRow(detectedVendor, detectedDate));
+        const detectedVendor = parsed.vendor || '';
+        const detectedDate = parsed.delivered_date || today;
+
+        const newRows = (parsed.items || []).map((it, i) => ({
+          id: Date.now() + fi * 1000 + i,
+          vendor: detectedVendor,
+          item_name: it.item_name || '',
+          item_code: it.item_code || '',
+          unit_price: it.unit_price !== null && it.unit_price !== undefined ? String(it.unit_price) : '',
+          quantity: it.quantity !== null && it.quantity !== undefined ? String(it.quantity) : '',
+          delivered_date: detectedDate,
+          note: it.note || '',
+        }));
+
+        if (newRows.length === 0) newRows.push(emptyRow(detectedVendor, detectedDate));
+        allRows.push(...newRows);
+
+        // 1枚目のフッター情報を使用（請求書Noなど）
+        if (fi === 0) {
+          mergedFooter = {
+            invoice_no: parsed.invoice_no || '',
+            subtotal: parsed.subtotal != null ? String(parsed.subtotal) : '',
+            tax_amount: parsed.tax_amount != null ? String(parsed.tax_amount) : '',
+            total: parsed.total != null ? String(parsed.total) : '',
+          };
+        }
+
+        // マッチング候補取得
+        const matchResults = await Promise.all(newRows.map(async row => {
+          try {
+            const res = await fetch(`${BASE}/api/deliveries/match`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ item_name: row.item_name, item_code: row.item_code })
+            });
+            const d = await res.json();
+            return { id: row.id, matched: d.matched, candidates: d.items || [] };
+          } catch { return { id: row.id, matched: false, candidates: [] }; }
+        }));
+        allMatchResults.push(...matchResults);
       }
 
-      setFooter({
-        invoice_no: parsed.invoice_no || '',
-        subtotal: parsed.subtotal != null ? String(parsed.subtotal) : '',
-        tax_amount: parsed.tax_amount != null ? String(parsed.tax_amount) : '',
-        total: parsed.total != null ? String(parsed.total) : '',
-      });
-
-      // 各品目のマッチング候補を取得
-      const BASE = process.env.REACT_APP_API_URL || 'http://localhost:3001';
-      const matchResults = await Promise.all(newRows.map(async row => {
-        try {
-          const res = await fetch(`${BASE}/api/deliveries/match`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ item_name: row.item_name, item_code: row.item_code })
-          });
-          const data = await res.json();
-          return { id: row.id, matched: data.matched, candidates: data.items || [] };
-        } catch { return { id: row.id, matched: false, candidates: [] }; }
-      }));
-      setMatchingSuggestions(matchResults);
-
-      setRows(newRows);
+      setFooter(mergedFooter);
+      setMatchingSuggestions(allMatchResults);
+      setRows(allRows);
       setStep('review');
     } catch (err) {
       console.error(err);
@@ -2218,8 +2226,13 @@ function ReceiptTab({ lang, t, showToast, location }) {
                 background:'var(--bg-2)', cursor:'pointer',
                 overflow:'hidden', position:'relative',
               }}>
-                {imageUrl ? (
-                  <img src={imageUrl} alt="伝票" style={{ width:'100%', maxHeight:220, objectFit:'contain', display:'block' }} />
+                {imageFiles.length > 0 ? (
+                  <div style={{ display:'flex', gap:4, overflowX:'auto', padding:6 }}>
+                    {imageFiles.map((f, i) => (
+                      <img key={i} src={URL.createObjectURL(f)} alt={`伝票${i+1}`}
+                        style={{ height:160, objectFit:'contain', borderRadius:6, flexShrink:0 }} />
+                    ))}
+                  </div>
                 ) : (
                   <div style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', height:140, gap:8 }}>
                     <span style={{ fontSize:36 }}>📷</span>
@@ -2228,13 +2241,13 @@ function ReceiptTab({ lang, t, showToast, location }) {
                 )}
                 <input
                   ref={inputRef}
-                  type="file" accept="image/*"
+                  type="file" accept="image/*" multiple
                   onChange={handleFileChange}
                   style={{ position:'absolute', inset:0, opacity:0, cursor:'pointer' }}
                 />
               </label>
 
-              {imageUrl && step === 'capture' && (
+              {imageFiles.length > 0 && step === 'capture' && (
                 <button
                   onClick={analyze}
                   disabled={analyzing}
@@ -2245,7 +2258,7 @@ function ReceiptTab({ lang, t, showToast, location }) {
                     fontSize:15, fontWeight:600, cursor: analyzing ? 'not-allowed' : 'pointer',
                   }}
                 >
-                  {analyzing ? l('analyzing') : l('analyze')}
+                  {analyzing ? `${l('analyzing')}` : imageFiles.length > 1 ? `${l('analyze')}（${imageFiles.length}枚）` : l('analyze')}
                 </button>
               )}
             </div>
@@ -2451,7 +2464,7 @@ function ReceiptTab({ lang, t, showToast, location }) {
               </div>
 
               {/* 別の伝票 */}
-              <button onClick={() => { setStep('capture'); setImageUrl(''); setImageFile(null); setRows([]); setFooter({ invoice_no: '', subtotal: '', tax_amount: '', total: '' }); setMatchingSuggestions([]); }}
+              <button onClick={() => { setStep('capture'); setImageUrl(''); setImageFiles([]); setRows([]); setFooter({ invoice_no: '', subtotal: '', tax_amount: '', total: '' }); setMatchingSuggestions([]); }}
                 style={{ width:'100%', marginTop:10, padding:'10px 0', borderRadius:10, border:'1px solid var(--border)', background:'transparent', color:'var(--text-2)', fontSize:13, cursor:'pointer' }}>
                 {l('retry')}
               </button>
@@ -2463,7 +2476,7 @@ function ReceiptTab({ lang, t, showToast, location }) {
             <div style={{ textAlign:'center', padding:'40px 0' }}>
               <div style={{ fontSize:48, marginBottom:12 }}>✅</div>
               <div style={{ fontSize:16, fontWeight:600, color:'var(--text-1)', marginBottom:24 }}>{l('saved')}</div>
-              <button onClick={() => { setStep('capture'); setImageUrl(''); setImageFile(null); setRows([]); setFooter({ invoice_no: '', subtotal: '', tax_amount: '', total: '' }); setMatchingSuggestions([]); }}
+              <button onClick={() => { setStep('capture'); setImageUrl(''); setImageFiles([]); setRows([]); setFooter({ invoice_no: '', subtotal: '', tax_amount: '', total: '' }); setMatchingSuggestions([]); }}
                 style={{ padding:'12px 32px', borderRadius:10, border:'none', background:'#D85A30', color:'white', fontSize:14, fontWeight:600, cursor:'pointer' }}>
                 {l('retry')}
               </button>
