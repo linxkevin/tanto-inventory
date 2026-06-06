@@ -2020,7 +2020,47 @@ function ReceiptTab({ lang, t, showToast, location }) {
         const clean = text.replace(/```json|```/g, '').trim();
         const parsed = JSON.parse(clean);
 
-        const detectedVendor = parsed.vendor || '';
+        // 業者名を正規ベンダーリストに正規化
+        const rawVendor = parsed.vendor || '';
+        const VENDOR_LIST = [
+          'Wismettac Asian Foods, Inc.',
+          'The Cherry Co., Ltd.',
+          'JFC International INC.',
+          'KUKUI FOOD',
+          'Select 7, Inc.',
+          'Sun Noodle',
+          'Fukuoka Package USA, Inc.',
+        ];
+        const normalizeVendor = (name) => {
+          if (!name) return '';
+          const lower = name.toLowerCase().replace(/[.,\s]+/g, '');
+          const scored = VENDOR_LIST.map(v => {
+            const vl = v.toLowerCase().replace(/[.,\s]+/g, '');
+            // 完全一致
+            if (lower === vl) return { v, score: 100 };
+            // 片方がもう片方を含む
+            if (lower.includes(vl) || vl.includes(lower)) return { v, score: 80 };
+            // キーワードマッチ（cherry, kukui, noodle, jfc, wismettac, select, fukuoka）
+            const keywords = {
+              'cherry': 'The Cherry Co., Ltd.',
+              'jfc': 'JFC International INC.',
+              'kukui': 'KUKUI FOOD',
+              'noodle': 'Sun Noodle',
+              'wismettac': 'Wismettac Asian Foods, Inc.',
+              'select7': 'Select 7, Inc.',
+              'select 7': 'Select 7, Inc.',
+              'fukuoka': 'Fukuoka Package USA, Inc.',
+              'sunnoodle': 'Sun Noodle',
+            };
+            for (const [kw, mapped] of Object.entries(keywords)) {
+              if (lower.includes(kw.replace(/\s/g, ''))) return { v: mapped, score: 60 };
+            }
+            return { v, score: 0 };
+          });
+          const best = scored.sort((a, b) => b.score - a.score)[0];
+          return best.score >= 60 ? best.v : name; // 60点未満は元の名前を保持
+        };
+        const detectedVendor = normalizeVendor(rawVendor);
         const detectedDate = parsed.delivered_date || today;
 
         const newRows = (parsed.items || []).map((it, i) => ({
