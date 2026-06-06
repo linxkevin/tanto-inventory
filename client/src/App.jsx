@@ -3595,6 +3595,50 @@ function MonthlyTab({ history, lang, l }) {
 
 
 
+function EditableDate({ group, onSave }) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState((group.date||'').slice(0,10));
+
+  const handleSave = async () => {
+    if (value && value !== group.date) {
+      await onSave(value);
+    }
+    setEditing(false);
+  };
+
+  if (editing) {
+    return (
+      <div style={{ display:'flex', gap:6, alignItems:'center' }}>
+        <input
+          type="date"
+          value={value}
+          onChange={e => setValue(e.target.value)}
+          onKeyDown={e => { if(e.key==='Enter') handleSave(); if(e.key==='Escape') setEditing(false); }}
+          autoFocus
+          style={{ fontSize:13, padding:'2px 8px', borderRadius:6, border:'1px solid #D85A30', outline:'none' }}
+        />
+        <button onClick={handleSave}
+          style={{ padding:'2px 10px', borderRadius:6, border:'none', background:'#D85A30', color:'white', fontSize:12, cursor:'pointer' }}>
+          保存
+        </button>
+        <button onClick={() => setEditing(false)}
+          style={{ padding:'2px 8px', borderRadius:6, border:'1px solid var(--border)', background:'transparent', fontSize:12, cursor:'pointer' }}>
+          ×
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <span
+      onClick={() => { setValue((group.date||'').slice(0,10)); setEditing(true); }}
+      style={{ fontSize:12, color:'var(--text-2)', cursor:'pointer', borderBottom:'1px dashed var(--border)' }}
+      title="クリックして日付を編集">
+      {group.date} ✏️
+    </span>
+  );
+}
+
 function EditableVendor({ group, onSave }) {
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(group.vendor);
@@ -3824,7 +3868,18 @@ function DeliveryHistory({ history, deleteItem, deleteGroup, onReload }) {
                       ));
                       if (onReload) onReload();
                     }} />
-                    <span style={{ fontSize:12, color:'var(--text-2)' }}>{group.date} · {group.items.length}品目</span>
+                    <EditableDate group={group} onSave={async (newDate) => {
+                      const BASE = process.env.REACT_APP_API_URL || 'http://localhost:3001';
+                      await Promise.all(group.items.map(it =>
+                        fetch(`${BASE}/api/deliveries/${it.id}`, {
+                          method: 'PATCH',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ ...it, delivered_date: newDate })
+                        })
+                      ));
+                      if (onReload) onReload();
+                    }} />
+                    <span style={{ fontSize:12, color:'var(--text-2)' }}>· {group.items.length}品目</span>
                     {group.items[0]?.invoice_no && (
                       <span style={{ fontSize:11, color:'var(--text-2)', background:'var(--bg-2)', padding:'2px 7px', borderRadius:6, border:'1px solid var(--border)' }}>
                         # {group.items[0].invoice_no}
