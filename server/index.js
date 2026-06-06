@@ -859,7 +859,7 @@ app.post('/api/orders/:id/send', async (req, res) => {
 
     const emailPayload = {
       from: `TANTO Order (No Reply) <${process.env.MAIL_FROM || 'noreply@medigreen.energy'}>`,
-      to: [toAddress],
+      to: toAddress.split(',').map(e => e.trim()).filter(Boolean),
       subject,
       html: htmlBody,
       attachments: [{
