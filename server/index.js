@@ -460,10 +460,38 @@ Japanese: ${text}`;
   }
 });
 
-// GET all items (active only by default, ?all=true for all)
+// ひらがな⇔カタカナ正規化
+function normalizeKana(str) {
+  if (!str) return '';
+  // カタカナ→ひらがな
+  return str.replace(/[\u30A1-\u30F6]/g, c => String.fromCharCode(c.charCodeAt(0) - 0x60)).toLowerCase();
+}
+
+// GET all items (active only by default, ?all=true for all, ?q= for search)
 app.get('/api/items', async (req, res) => {
   try {
     const showAll = req.query.all === 'true';
+    const q = req.query.q ? req.query.q.trim() : '';
+
+    if (q) {
+      const norm = normalizeKana(q);
+      // name_ja / name_en / vendor_item_name をひらがな正規化して部分一致
+      const { rows } = await pool.query(`
+        SELECT * FROM items
+        WHERE active = true
+        AND (
+          LOWER(name_ja) LIKE $1
+          OR LOWER(name_en) LIKE $1
+          OR LOWER(vendor_item_name) LIKE $1
+          OR LOWER(name_ja) LIKE $2
+          OR LOWER(name_en) LIKE $2
+        )
+        ORDER BY category, id
+        LIMIT 20
+      `, [`%${norm}%`, `%${q.toLowerCase()}%`]);
+      return res.json(rows);
+    }
+
     const query = showAll
       ? 'SELECT * FROM items ORDER BY category, id'
       : 'SELECT * FROM items WHERE active=true ORDER BY category, id';
@@ -1189,20 +1217,36 @@ app.post('/api/deliveries/match', async (req, res) => {
 
     if (exact.length > 0) return res.json({ matched: true, items: exact });
 
-    // 部分一致で候補を探す
-    const words = item_name.toLowerCase().split(/[\s_\-\/]+/).filter(w => w.length > 2);
-    if (words.length === 0) return res.json({ matched: false, items: [] });
+    // 部分一致で候補を探す（日本語ファジー検索対応）
+    // ひらがな⇔カタカナ正規化
+    const normalizeStr = (str) => {
+      if (!str) return '';
+      return str.replace(/[\u30A1-\u30F6]/g, c => String.fromCharCode(c.charCodeAt(0) - 0x60)).toLowerCase();
+    };
 
-    const conditions = words.map((w, i) => 
-      `(LOWER(name_ja) LIKE $${i+1} OR LOWER(name_en) LIKE $${i+1} OR LOWER(vendor_item_name) LIKE $${i+1})`
+    // 英単語分割 + 日本語は2文字以上のサブストリングで検索
+    const normName = normalizeStr(item_name);
+    const enWords = item_name.toLowerCase().split(/[\s_\-\/]+/).filter(w => w.length > 2);
+
+    // 検索条件を構築（英語単語 + 正規化済み全体 + 元の文字列）
+    const searchTerms = [...new Set([
+      normName,           // ひらがな正規化
+      item_name.toLowerCase(), // 元の文字列
+      ...enWords,         // 英語単語分割
+    ])].filter(w => w.length > 1);
+
+    if (searchTerms.length === 0) return res.json({ matched: false, items: [] });
+
+    const conditions = searchTerms.map((w, i) =>
+      `(LOWER(name_ja) LIKE $${i+1} OR LOWER(name_en) LIKE $${i+1} OR LOWER(vendor_item_name) LIKE $${i+1} OR LOWER(name_ja) LIKE $${i+1})`
     ).join(' OR ');
-    const params = words.map(w => `%${w}%`);
+    const params = searchTerms.map(w => `%${w}%`);
 
     const { rows: partial } = await pool.query(`
       SELECT id, name_ja, name_en, vendor, vendor_item_name, vendor_item_code, order_item_name
       FROM items WHERE active = true
       AND (${conditions})
-      LIMIT 5
+      LIMIT 8
     `, params);
 
     res.json({ matched: false, items: partial });
