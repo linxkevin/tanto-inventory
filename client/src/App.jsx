@@ -3010,14 +3010,19 @@ function OrderTab({ lang, t, items, showToast, location, sessions }) {
 
       {/* 発注履歴 */}
       {orderSubTab === 'history' && (
-        <OrderHistory orders={orders} lang={lang} />
+        <OrderHistory orders={orders} lang={lang} onDelete={async (id) => {
+          if (!window.confirm('この発注履歴を削除しますか？')) return;
+          const BASE = process.env.REACT_APP_API_URL || 'http://localhost:3001';
+          await fetch(`${BASE}/api/orders/${id}`, { method: 'DELETE' });
+          loadOrders();
+        }} />
       )}
     </div>
   );
 }
 
 
-function OrderHistory({ orders, lang }) {
+function OrderHistory({ orders, lang, onDelete }) {
   const [selectedMonth, setSelectedMonth] = useState('');
   const [selectedVendor, setSelectedVendor] = useState('');
   const [viewMode, setViewMode] = useState('log'); // log | summary
@@ -3148,6 +3153,12 @@ function OrderHistory({ orders, lang }) {
                 <div style={{ display:'flex', gap:8, alignItems:'center' }}>
                   {order.delivery_date && <span style={{ fontSize:11, color:'var(--text-2)' }}>納品: {(order.delivery_date||'').slice(0,10)}</span>}
                   <span style={{ fontSize:12, color:'var(--text-2)' }}>{(order.order_date||'').slice(0,10)}</span>
+                  {onDelete && (
+                    <button onClick={() => onDelete(order.id)}
+                      style={{ padding:'3px 10px', fontSize:11, border:'1px solid #e55', borderRadius:6, background:'transparent', color:'#e55', cursor:'pointer', whiteSpace:'nowrap' }}>
+                      削除
+                    </button>
+                  )}
                 </div>
               </div>
               <div style={{ padding:'8px 14px' }}>
