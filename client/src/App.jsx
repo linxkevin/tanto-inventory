@@ -2077,15 +2077,19 @@ function ReceiptTab({ lang, t, showToast, location }) {
         if (newRows.length === 0) newRows.push(emptyRow(detectedVendor, detectedDate));
         allRows.push(...newRows);
 
-        // 1枚目のフッター情報を使用（請求書Noなど）
+        // フッター情報をマージ（請求書Noは1枚目、金額は合算）
         if (fi === 0) {
-          mergedFooter = {
-            invoice_no: parsed.invoice_no || '',
-            subtotal: parsed.subtotal != null ? String(parsed.subtotal) : '',
-            tax_amount: parsed.tax_amount != null ? String(parsed.tax_amount) : '',
-            total: parsed.total != null ? String(parsed.total) : '',
-          };
+          mergedFooter.invoice_no = parsed.invoice_no || '';
         }
+        mergedFooter.subtotal = String(
+          (parseFloat(mergedFooter.subtotal) || 0) + (parsed.subtotal != null ? parseFloat(parsed.subtotal) : 0)
+        );
+        mergedFooter.tax_amount = String(
+          (parseFloat(mergedFooter.tax_amount) || 0) + (parsed.tax_amount != null ? parseFloat(parsed.tax_amount) : 0)
+        );
+        mergedFooter.total = String(
+          (parseFloat(mergedFooter.total) || 0) + (parsed.total != null ? parseFloat(parsed.total) : 0)
+        );
 
         // マッチング候補取得
         const matchResults = await Promise.all(newRows.map(async row => {
