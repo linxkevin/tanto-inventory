@@ -1948,7 +1948,7 @@ function ReceiptTab({ lang, t, showToast, location }) {
   const [rows, setRows]           = useState([]);
   const [matchingSuggestions, setMatchingSuggestions] = useState([]);
   const [manualSearchState, setManualSearchState] = useState({}); // { [rowId]: { open, query, results, loading } }
-  const [footer, setFooter]       = useState({ invoice_no: '', subtotal: '', tax_amount: '', total: '' });
+  const [footers, setFooters]     = useState([{ invoice_no: '', subtotal: '', tax_amount: '', total: '' }]); // 枚数分のフッター
   const [saving, setSaving]       = useState(false);
   const [history, setHistory]     = useState([]);
   const [historyTab, setHistoryTab] = useState('input'); // input | history
@@ -2004,7 +2004,7 @@ function ReceiptTab({ lang, t, showToast, location }) {
       const today = new Date().toISOString().slice(0,10);
       const allRows = [];
       const allMatchResults = [];
-      let mergedFooter = { invoice_no: '', subtotal: '', tax_amount: '', total: '' };
+      const allFooters = [];
 
       // 1枚ずつ順番に解析
       for (let fi = 0; fi < imageFiles.length; fi++) {
@@ -2065,6 +2065,7 @@ function ReceiptTab({ lang, t, showToast, location }) {
 
         const newRows = (parsed.items || []).map((it, i) => ({
           id: Date.now() + fi * 1000 + i,
+          _footerIdx: fi, // どのInvoiceグループか
           vendor: detectedVendor,
           item_name: it.item_name || '',
           item_code: it.item_code || '',
@@ -2074,22 +2075,16 @@ function ReceiptTab({ lang, t, showToast, location }) {
           note: it.note || '',
         }));
 
-        if (newRows.length === 0) newRows.push(emptyRow(detectedVendor, detectedDate));
+        if (newRows.length === 0) newRows.push({ ...emptyRow(detectedVendor, detectedDate), _footerIdx: fi });
         allRows.push(...newRows);
 
-        // フッター情報をマージ（請求書Noは1枚目、金額は合算）
-        if (fi === 0) {
-          mergedFooter.invoice_no = parsed.invoice_no || '';
-        }
-        mergedFooter.subtotal = String(
-          (parseFloat(mergedFooter.subtotal) || 0) + (parsed.subtotal != null ? parseFloat(parsed.subtotal) : 0)
-        );
-        mergedFooter.tax_amount = String(
-          (parseFloat(mergedFooter.tax_amount) || 0) + (parsed.tax_amount != null ? parseFloat(parsed.tax_amount) : 0)
-        );
-        mergedFooter.total = String(
-          (parseFloat(mergedFooter.total) || 0) + (parsed.total != null ? parseFloat(parsed.total) : 0)
-        );
+        // 枚数分のフッターを個別に保持
+        allFooters.push({
+          invoice_no: parsed.invoice_no || '',
+          subtotal: parsed.subtotal != null ? String(parsed.subtotal) : '',
+          tax_amount: parsed.tax_amount != null ? String(parsed.tax_amount) : '',
+          total: parsed.total != null ? String(parsed.total) : '',
+        });
 
         // マッチング候補取得
         const matchResults = await Promise.all(newRows.map(async row => {
@@ -2106,7 +2101,7 @@ function ReceiptTab({ lang, t, showToast, location }) {
         allMatchResults.push(...matchResults);
       }
 
-      setFooter(mergedFooter);
+      setFooters(allFooters.length > 0 ? allFooters : [{ invoice_no: '', subtotal: '', tax_amount: '', total: '' }]);
       setMatchingSuggestions(allMatchResults);
       setRows(allRows);
       setStep('review');
@@ -2142,46 +2137,64 @@ function ReceiptTab({ lang, t, showToast, location }) {
     setRows(prev => [...prev, emptyRow(last?.vendor || '', last?.delivered_date || '')]);
   };
 
-  // 保存
+  // 保存（Invoice番号ごとにグループ分けして保存）
   const saveAll = async () => {
     if (rows.length === 0) return;
     setSaving(true);
     try {
-      // Invoice No.重複チェック
-      if (footer.invoice_no) {
-        const BASE = process.env.REACT_APP_API_URL || 'http://localhost:3001';
-        const existing = await fetch(`${BASE}/api/deliveries?invoice_no=${encodeURIComponent(footer.invoice_no)}`).then(r => r.json());
-        if (existing.length > 0) {
-          const ok = window.confirm(`Invoice No. "${footer.invoice_no}" はすでに登録されています。\n上書きしますか？\n（既存データを削除して新しいデータを保存します）`);
-          if (!ok) { setSaving(false); return; }
-          // 既存データを削除
-          await Promise.all(existing.map(it => fetch(`${BASE}/api/deliveries/${it.id}`, { method: 'DELETE' })));
-        }
-      }
+      const BASE = process.env.REACT_APP_API_URL || 'http://localhost:3001';
       const validRows = rows.filter(r => r.item_name.trim() !== '');
       if (validRows.length === 0) { showToast('❌ 品名を入力してください'); setSaving(false); return; }
-      const payload = validRows.map(r => ({
-        vendor: r.vendor,
-        item_name: r.item_name,
-        item_code: r.item_code,
-        unit_price: r.unit_price !== '' ? parseFloat(r.unit_price) : null,
-        quantity: r.quantity !== '' ? parseFloat(r.quantity) : null,
-        delivered_date: r.delivered_date,
-        note: r.note,
+
+      // Invoice番号ごとにグループ分け（footersの順番に対応）
+      // 各rowにfooterインデックスを持たせる（analyzeで付与済み）
+      // footersが1つの場合は全行を同じグループに
+      const groups = footers.map((footer, fi) => ({
+        footer,
+        rows: validRows.filter(r => (r._footerIdx ?? 0) === fi),
+      })).filter(g => g.rows.length > 0);
+
+      // グループがない場合（手動入力など）は全行を1グループに
+      if (groups.length === 0) {
+        groups.push({ footer: footers[0] || { invoice_no:'', subtotal:'', tax_amount:'', total:'' }, rows: validRows });
+      }
+
+      for (const group of groups) {
+        const footer = group.footer;
+        // Invoice No.重複チェック
+        if (footer.invoice_no) {
+          const existing = await fetch(`${BASE}/api/deliveries?invoice_no=${encodeURIComponent(footer.invoice_no)}`).then(r => r.json());
+          if (existing.length > 0) {
+            const ok = window.confirm(`Invoice No. "${footer.invoice_no}" はすでに登録されています。
+上書きしますか？
+（既存データを削除して新しいデータを保存します）`);
+            if (!ok) continue;
+            await Promise.all(existing.map(it => fetch(`${BASE}/api/deliveries/${it.id}`, { method: 'DELETE' })));
+          }
+        }
+        const payload = group.rows.map(r => ({
+          vendor: r.vendor,
+          item_name: r.item_name,
+          item_code: r.item_code,
+          unit_price: r.unit_price !== '' ? parseFloat(r.unit_price) : null,
+          quantity: r.quantity !== '' ? parseFloat(r.quantity) : null,
+          delivered_date: r.delivered_date,
+          note: r.note,
           invoice_no: footer.invoice_no || '',
           location: location || 'Piikoi',
           tax_amount: footer.tax_amount !== '' ? parseFloat(footer.tax_amount) : 0,
-        subtotal: footer.subtotal !== '' ? parseFloat(footer.subtotal) : 0,
-        total: footer.total !== '' ? parseFloat(footer.total) : 0,
-        image_url: '',
-      }));
-      const BASE = process.env.REACT_APP_API_URL || 'http://localhost:3001';
-      const res = await fetch(`${BASE}/api/deliveries`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items: payload }),
-      });
-      if (!res.ok) throw new Error(await res.text());
+          subtotal: footer.subtotal !== '' ? parseFloat(footer.subtotal) : 0,
+          total: footer.total !== '' ? parseFloat(footer.total) : 0,
+          image_url: '',
+        }));
+        const BASE2 = process.env.REACT_APP_API_URL || 'http://localhost:3001';
+        const res = await fetch(`${BASE2}/api/deliveries`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ items: payload }),
+        });
+        if (!res.ok) throw new Error(await res.text());
+      }
       showToast(l('saved'));
       setStep('saved');
       loadHistory();
@@ -2191,6 +2204,7 @@ function ReceiptTab({ lang, t, showToast, location }) {
       setSaving(false);
     }
   };
+
 
   // 行単位削除
   const deleteItem = async (id) => {
@@ -2472,28 +2486,35 @@ function ReceiptTab({ lang, t, showToast, location }) {
                 </div>
               )}
 
-              {/* 伝票フッター */}
-              <div style={{ marginTop:12, padding:'12px 14px', background:'var(--bg-2)', borderRadius:10, border:'1px solid var(--border)' }}>
-                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr 1fr', gap:10 }}>
-                  {[
-                    { key:'invoice_no', label: lang==='en'?'Invoice #':lang==='zh'?'发票号':'請求書No.' },
-                    { key:'subtotal',   label: lang==='en'?'Subtotal':lang==='zh'?'小计':'小計' },
-                    { key:'tax_amount', label: lang==='en'?'Tax':lang==='zh'?'税额':'税額' },
-                    { key:'total',      label: lang==='en'?'Total':lang==='zh'?'合计':'合計' },
-                  ].map(({key, label}) => (
-                    <div key={key}>
-                      <div style={{ fontSize:11, color:'var(--text-2)', marginBottom:4 }}>{label}</div>
-                      <input
-                        type={key === 'invoice_no' ? 'text' : 'number'}
-                        value={footer[key]}
-                        onChange={e => setFooter(prev => ({...prev, [key]: e.target.value}))}
-                        placeholder={key === 'invoice_no' ? 'INV-XXXX' : '0.00'}
-                        style={{...inputStyle, width:'100%', fontSize:14, padding:'6px 8px'}}
-                      />
+              {/* 伝票フッター（Invoice番号ごと） */}
+              {footers.map((footer, fi) => (
+                <div key={fi} style={{ marginTop:12, padding:'12px 14px', background:'var(--bg-2)', borderRadius:10, border:'1px solid var(--border)' }}>
+                  {footers.length > 1 && (
+                    <div style={{ fontSize:11, fontWeight:600, color:'#D85A30', marginBottom:8 }}>
+                      📄 伝票 {fi + 1}枚目
                     </div>
-                  ))}
+                  )}
+                  <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr 1fr', gap:10 }}>
+                    {[
+                      { key:'invoice_no', label: lang==='en'?'Invoice #':lang==='zh'?'发票号':'請求書No.' },
+                      { key:'subtotal',   label: lang==='en'?'Subtotal':lang==='zh'?'小计':'小計' },
+                      { key:'tax_amount', label: lang==='en'?'Tax':lang==='zh'?'税额':'税額' },
+                      { key:'total',      label: lang==='en'?'Total':lang==='zh'?'合计':'合計' },
+                    ].map(({key, label}) => (
+                      <div key={key}>
+                        <div style={{ fontSize:11, color:'var(--text-2)', marginBottom:4 }}>{label}</div>
+                        <input
+                          type={key === 'invoice_no' ? 'text' : 'number'}
+                          value={footer[key]}
+                          onChange={e => setFooters(prev => prev.map((f, i) => i === fi ? {...f, [key]: e.target.value} : f))}
+                          placeholder={key === 'invoice_no' ? 'INV-XXXX' : '0.00'}
+                          style={{...inputStyle, width:'100%', fontSize:14, padding:'6px 8px'}}
+                        />
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              ))}
 
               {/* 行追加 + 保存 */}
               <div style={{ display:'flex', gap:10, marginTop:12 }}>
@@ -2508,7 +2529,7 @@ function ReceiptTab({ lang, t, showToast, location }) {
               </div>
 
               {/* 別の伝票 */}
-              <button onClick={() => { setStep('capture'); setImageUrl(''); setImageFiles([]); setRows([]); setFooter({ invoice_no: '', subtotal: '', tax_amount: '', total: '' }); setMatchingSuggestions([]); }}
+              <button onClick={() => { setStep('capture'); setImageUrl(''); setImageFiles([]); setRows([]); setFooters([{ invoice_no: '', subtotal: '', tax_amount: '', total: '' }]); setMatchingSuggestions([]); }}
                 style={{ width:'100%', marginTop:10, padding:'10px 0', borderRadius:10, border:'1px solid var(--border)', background:'transparent', color:'var(--text-2)', fontSize:13, cursor:'pointer' }}>
                 {l('retry')}
               </button>
@@ -2520,7 +2541,7 @@ function ReceiptTab({ lang, t, showToast, location }) {
             <div style={{ textAlign:'center', padding:'40px 0' }}>
               <div style={{ fontSize:48, marginBottom:12 }}>✅</div>
               <div style={{ fontSize:16, fontWeight:600, color:'var(--text-1)', marginBottom:24 }}>{l('saved')}</div>
-              <button onClick={() => { setStep('capture'); setImageUrl(''); setImageFiles([]); setRows([]); setFooter({ invoice_no: '', subtotal: '', tax_amount: '', total: '' }); setMatchingSuggestions([]); }}
+              <button onClick={() => { setStep('capture'); setImageUrl(''); setImageFiles([]); setRows([]); setFooters([{ invoice_no: '', subtotal: '', tax_amount: '', total: '' }]); setMatchingSuggestions([]); }}
                 style={{ padding:'12px 32px', borderRadius:10, border:'none', background:'#D85A30', color:'white', fontSize:14, fontWeight:600, cursor:'pointer' }}>
                 {l('retry')}
               </button>
