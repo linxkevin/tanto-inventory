@@ -4051,7 +4051,9 @@ function groupByVendorDate(items) {
   const map = {};
   for (const it of items) {
     const date = it.delivered_date ? it.delivered_date.slice(0,10) : '不明';
-    const key = `${it.vendor || '不明'}_${date}`;
+    const invoice = it.invoice_no || '';
+    // Invoice番号がある場合はそれでグループ分け、ない場合は業者+日付
+    const key = invoice ? `${it.vendor || '不明'}_${date}_${invoice}` : `${it.vendor || '不明'}_${date}`;
     if (!map[key]) map[key] = { key, vendor: it.vendor || '不明', date, items: [] };
     map[key].items.push(it);
   }
