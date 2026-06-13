@@ -152,6 +152,14 @@ async function initDB() {
     EXCEPTION WHEN others THEN NULL;
     END $$;
 
+    CREATE TABLE IF NOT EXISTS item_location_settings (
+      id          SERIAL PRIMARY KEY,
+      item_id     INTEGER REFERENCES items(id) ON DELETE CASCADE,
+      location    TEXT NOT NULL,
+      min_stock   NUMERIC,
+      UNIQUE(item_id, location)
+    );
+
     CREATE TABLE IF NOT EXISTS order_items (
       id         SERIAL PRIMARY KEY,
       order_id   INTEGER REFERENCES orders(id) ON DELETE CASCADE,
@@ -1106,6 +1114,14 @@ app.get('/api/stock', async (req, res) => {
     const deliveryParams = location ? [latestSession.date, location] : [latestSession.date];
     const { rows: deliveries } = await pool.query(deliveryQuery, deliveryParams);
 
+    // 店舗別min_stock設定を取得
+    const locSettingsQuery = location
+      ? `SELECT item_id, min_stock FROM item_location_settings WHERE location=$1`
+      : `SELECT item_id, min_stock FROM item_location_settings`;
+    const { rows: locSettings } = await pool.query(locSettingsQuery, location ? [location] : []);
+    const locMinMap = {};
+    locSettings.forEach(s => { locMinMap[s.item_id] = parseFloat(s.min_stock); });
+
     // アイテムごとに現在庫を計算
     const result = items.map(item => {
       const lastStock = stockMap[item.id] || 0;
@@ -1114,12 +1130,15 @@ app.get('/api/stock', async (req, res) => {
         (item.vendor_item_code && d.item_code && d.item_code.toLowerCase() === item.vendor_item_code.toLowerCase())
       );
       const deliveredSince = delivery ? parseFloat(delivery.qty) || 0 : 0;
+      // 店舗別min_stockがあればそちらを優先
+      const effectiveMinStock = locMinMap[item.id] !== undefined ? locMinMap[item.id] : (parseFloat(item.min_stock) || 0);
       return {
         ...item,
+        min_stock: effectiveMinStock,
         last_stock: lastStock,
         delivered_since: deliveredSince,
         current_stock: lastStock + deliveredSince,
-        last_session_date: latestSession.date,
+        last_session_date: latestSession ? latestSession.date : null,
       };
     });
 
@@ -1128,6 +1147,36 @@ app.get('/api/stock', async (req, res) => {
     console.error(e);
     res.status(500).json({ error: e.message });
   }
+});
+
+// ── Location Min Stock API ───────────────────────────
+app.get('/api/item-location-settings', async (req, res) => {
+  try {
+    const { location } = req.query;
+    const q = location
+      ? `SELECT * FROM item_location_settings WHERE location=$1`
+      : `SELECT * FROM item_location_settings`;
+    const { rows } = await pool.query(q, location ? [location] : []);
+    res.json(rows);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/item-location-settings', async (req, res) => {
+  try {
+    const { item_id, location, min_stock } = req.body;
+    if (min_stock === null || min_stock === '') {
+      // nullの場合は削除（デフォルトに戻す）
+      await pool.query(`DELETE FROM item_location_settings WHERE item_id=$1 AND location=$2`, [item_id, location]);
+      return res.json({ deleted: true });
+    }
+    const { rows } = await pool.query(`
+      INSERT INTO item_location_settings (item_id, location, min_stock)
+      VALUES ($1, $2, $3)
+      ON CONFLICT (item_id, location) DO UPDATE SET min_stock=$3
+      RETURNING *
+    `, [item_id, location, min_stock]);
+    res.json(rows[0]);
+  } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
 // ── LINE通知 ──────────────────────────────────────────

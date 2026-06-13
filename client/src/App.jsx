@@ -993,6 +993,34 @@ function HistoryTab({ lang, t, sessions, showToast }) {
 // SETTINGS TAB
 // ─────────────────────────────────────────────────────
 function SettingsTab({ lang, t, items, setItems, adminEmail, setAdminEmail, categories, setCategories, showToast }) {
+  const [locationSettings, setLocationSettings] = React.useState({}); // { item_id: { Piikoi: min, University: min } }
+
+  React.useEffect(() => {
+    const BASE = process.env.REACT_APP_API_URL || 'http://localhost:3001';
+    fetch(`${BASE}/api/item-location-settings`)
+      .then(r => r.json())
+      .then(rows => {
+        const map = {};
+        rows.forEach(r => {
+          if (!map[r.item_id]) map[r.item_id] = {};
+          map[r.item_id][r.location] = r.min_stock;
+        });
+        setLocationSettings(map);
+      }).catch(console.error);
+  }, []);
+
+  const saveLocationSetting = async (item_id, location, min_stock) => {
+    const BASE = process.env.REACT_APP_API_URL || 'http://localhost:3001';
+    await fetch(`${BASE}/api/item-location-settings`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ item_id, location, min_stock: min_stock === '' ? null : parseFloat(min_stock) }),
+    });
+    setLocationSettings(prev => ({
+      ...prev,
+      [item_id]: { ...(prev[item_id] || {}), [location]: min_stock === '' ? null : parseFloat(min_stock) }
+    }));
+  };
   const [email, setEmail] = useState(adminEmail);
   const [saving, setSaving] = useState(false);
   const [newCatInput, setNewCatInput] = useState('');
@@ -1459,9 +1487,25 @@ Japanese: ${name}`
                   onChange={e=>setEditingItem(v=>({...v,unit:e.target.value}))} />
               </div>
               <div className="form-row" style={{margin:0}}>
-                <label className="form-label">{lang==='en'?'Min Stock':lang==='zh'?'最低库存':'規定在庫'}</label>
+                <label className="form-label">{lang==='en'?'Min Stock':lang==='zh'?'最低库存':'規定在庫（共通）'}</label>
                 <input className="form-input" type="number" value={editingItem.min_stock}
                   onChange={e=>setEditingItem(v=>({...v,min_stock:parseInt(e.target.value)||0}))} />
+              </div>
+            </div>
+            {/* 店舗別規定在庫 */}
+            <div className="form-row" style={{marginTop:8}}>
+              <label className="form-label" style={{marginBottom:6}}>店舗別規定在庫（任意・未設定時は共通値を使用）</label>
+              <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:8}}>
+                {['Piikoi','University'].map(loc => (
+                  <div key={loc}>
+                    <div style={{fontSize:11, color:'var(--text-2)', marginBottom:3}}>{loc}店</div>
+                    <input className="form-input" type="number"
+                      value={locationSettings[editingItem.id]?.[loc] ?? ''}
+                      placeholder={`共通: ${editingItem.min_stock}`}
+                      onChange={e => saveLocationSetting(editingItem.id, loc, e.target.value)}
+                    />
+                  </div>
+                ))}
               </div>
             </div>
             <div className="form-row">
