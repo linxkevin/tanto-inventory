@@ -1130,32 +1130,6 @@ app.get('/api/stock', async (req, res) => {
   }
 });
 
-// ── Debug Stock API ──────────────────────────────────
-app.get('/api/debug/stock', async (req, res) => {
-  try {
-    const { location } = req.query;
-    // 最新セッション確認
-    const sessionQ = location
-      ? `SELECT id, date, location, created_at FROM sessions WHERE location=$1 ORDER BY created_at DESC LIMIT 3`
-      : `SELECT id, date, location, created_at FROM sessions ORDER BY created_at DESC LIMIT 3`;
-    const { rows: sessions } = await pool.query(sessionQ, location ? [location] : []);
-
-    // 最新セッションのsession_items確認
-    let sessionItems = [];
-    if (sessions[0]) {
-      const { rows } = await pool.query(
-        `SELECT si.item_id, si.current_stock, i.name_ja FROM session_items si JOIN items i ON i.id=si.item_id WHERE si.session_id=$1 LIMIT 10`,
-        [sessions[0].id]
-      );
-      sessionItems = rows;
-    }
-
-    res.json({ sessions, sessionItems });
-  } catch(e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
 // ── LINE通知 ──────────────────────────────────────────
 async function sendLineMessage(message) {
   const token = process.env.LINE_CHANNEL_ACCESS_TOKEN;
