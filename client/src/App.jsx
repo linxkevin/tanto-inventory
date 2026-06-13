@@ -2102,6 +2102,8 @@ function ReceiptTab({ lang, t, showToast, location }) {
       }
 
       setFooters(allFooters.length > 0 ? allFooters : [{ invoice_no: '', subtotal: '', tax_amount: '', total: '' }]);
+      console.log('[DEBUG] matchResults:', JSON.stringify(allMatchResults));
+      console.log('[DEBUG] rows count:', allRows.length);
       setMatchingSuggestions(allMatchResults);
       setRows(allRows);
       setStep('review');
@@ -3298,13 +3300,15 @@ function StockTab({ lang, location }) {
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [filter, setFilter] = useState('all');
   const [searchWord, setSearchWord] = useState('');
+  const [stockLocation, setStockLocation] = useState(location || ''); // 在庫画面内の店舗選択
 
-  useEffect(() => { loadStock(); }, [location]);
+  useEffect(() => { loadStock(stockLocation); }, [stockLocation]);
+  useEffect(() => { setStockLocation(location || ''); }, [location]);
 
-  const loadStock = async () => {
+  const loadStock = async (loc) => {
     setLoading(true);
     try {
-      const data = await api.getStock(location);
+      const data = await api.getStock(loc);
       setStocks(data);
     } catch(e) { console.error(e); }
     finally { setLoading(false); }
@@ -3419,9 +3423,22 @@ function StockTab({ lang, location }) {
             placeholder="アイテムを検索..."
             style={{ width:'100%', padding:'8px 12px', borderRadius:8, border:'1px solid var(--border)', background:'var(--bg)', color:'var(--text-1)', fontSize:13, marginBottom:10, boxSizing:'border-box' }} />
 
+          {/* 店舗切替 */}
+          <div style={{ display:'flex', gap:6, marginBottom:10 }}>
+            {[{key:'', label:'全店舗'}, {key:'Piikoi', label:'Piikoi店'}, {key:'University', label:'University店'}].map(opt => (
+              <button key={opt.key} onClick={() => { setStockLocation(opt.key); setSelectedCategory(null); }}
+                style={{ padding:'5px 14px', borderRadius:20, border:'1px solid var(--border)', fontSize:12, cursor:'pointer',
+                  background: stockLocation===opt.key ? '#D85A30' : 'var(--bg-2)',
+                  color: stockLocation===opt.key ? 'white' : 'var(--text-2)',
+                  fontWeight: stockLocation===opt.key ? 600 : 400 }}>
+                {opt.label}
+              </button>
+            ))}
+          </div>
+
           <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
             <div style={{ fontSize:12, color:'var(--text-2)' }}>{filteredItems.length}件</div>
-            <button onClick={loadStock} style={{ padding:'5px 12px', borderRadius:8, border:'1px solid var(--border)', background:'var(--bg)', fontSize:12, cursor:'pointer' }}>🔄 更新</button>
+            <button onClick={() => loadStock(stockLocation)} style={{ padding:'5px 12px', borderRadius:8, border:'1px solid var(--border)', background:'var(--bg)', fontSize:12, cursor:'pointer' }}>🔄 更新</button>
           </div>
 
           <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
