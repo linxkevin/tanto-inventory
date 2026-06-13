@@ -1086,11 +1086,16 @@ app.get('/api/stock', async (req, res) => {
       return res.json(items.map(i => ({...i, current_stock: 0, last_stock: 0, delivered_since: 0, last_session_date: null})));
     }
 
-    // 棚卸し在庫を取得
-    const { rows: sessionItems } = await pool.query(
-      `SELECT item_id, current_stock FROM session_items WHERE session_id=$1`,
-      [latestSession.id]
-    );
+    // アイテムごとに最新のsession_itemsを取得（複数セッションに分けて棚卸しした場合に対応）
+    const locationCond = location ? `AND s.location = $1` : '';
+    const stockParams = location ? [location] : [];
+    const { rows: sessionItems } = await pool.query(`
+      SELECT DISTINCT ON (si.item_id) si.item_id, si.current_stock
+      FROM session_items si
+      JOIN sessions s ON s.id = si.session_id
+      WHERE 1=1 ${locationCond}
+      ORDER BY si.item_id, s.created_at DESC
+    `, stockParams);
     const stockMap = {};
     sessionItems.forEach(si => { stockMap[si.item_id] = parseFloat(si.current_stock) || 0; });
 
