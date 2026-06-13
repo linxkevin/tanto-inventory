@@ -3377,6 +3377,18 @@ function StockTab({ lang, location }) {
       {/* カテゴリータイル */}
       {!selectedCategory ? (
         <>
+          {/* 店舗切替（トップ画面） */}
+          <div style={{ display:'flex', gap:6, marginBottom:12 }}>
+            {[{key:'', label:'全店舗'}, {key:'Piikoi', label:'Piikoi店'}, {key:'University', label:'University店'}].map(opt => (
+              <button key={opt.key} onClick={() => setStockLocation(opt.key)}
+                style={{ padding:'5px 14px', borderRadius:20, border:'1px solid var(--border)', fontSize:12, cursor:'pointer',
+                  background: stockLocation===opt.key ? '#D85A30' : 'var(--bg-2)',
+                  color: stockLocation===opt.key ? 'white' : 'var(--text-2)',
+                  fontWeight: stockLocation===opt.key ? 600 : 400 }}>
+                {opt.label}
+              </button>
+            ))}
+          </div>
           <div style={{ fontSize:12, color:'var(--text-2)', marginBottom:8, fontWeight:500 }}>カテゴリーを選択</div>
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:16 }}>
             {catStats.map(({cat, items, orderCount, lowCount}) => (
