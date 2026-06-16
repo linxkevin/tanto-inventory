@@ -2615,7 +2615,7 @@ function ReceiptTab({ lang, t, showToast, location }) {
 
       {/* ── 月次集計タブ ── */}
       {historyTab === 'monthly' && (
-        <MonthlyTab history={history} lang={lang} l={l} />
+        <MonthlyTab lang={lang} l={l} />
       )}
 
       {/* ── 履歴タブ ── */}
@@ -3545,23 +3545,52 @@ function StockTab({ lang, location }) {
   );
 }
 
-function MonthlyTab({ history, lang, l }) {
-  const months = [...new Set(history.map(h => (h.delivered_date || '').slice(0,7)))].filter(Boolean).sort().reverse();
-  const [selectedMonth, setSelectedMonth] = useState(months[0] || '');
+function MonthlyTab({ lang, l }) {
+  const [selectedMonth, setSelectedMonth] = useState(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  });
   const [selectedVendor, setSelectedVendor] = useState(null);
   const [selectedLocation, setSelectedLocation] = useState('');
-  const locations = [...new Set(history.map(h => h.location).filter(Boolean))].sort();
+  const [filtered, setFiltered] = useState([]);
+  const [loading, setLoading] = useState(false);
 
-  const filtered = history.filter(h => {
-    const matchMonth = (h.delivered_date || '').startsWith(selectedMonth);
-    const matchLocation = !selectedLocation || h.location === selectedLocation;
-    return matchMonth && matchLocation;
-  });
+  // 過去6ヶ月分の月リスト
+  const months = [];
+  for (let i = 0; i < 6; i++) {
+    const d = new Date();
+    d.setMonth(d.getMonth() - i);
+    months.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`);
+  }
+
+  const locations = [...new Set(filtered.map(h => h.location).filter(Boolean))].sort();
+
+  useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true);
+      try {
+        const BASE = process.env.REACT_APP_API_URL || 'http://localhost:3001';
+        const from = `${selectedMonth}-01`;
+        const lastDay = new Date(selectedMonth.split('-')[0], selectedMonth.split('-')[1], 0).getDate();
+        const to = `${selectedMonth}-${String(lastDay).padStart(2,'0')}`;
+        const params = new URLSearchParams({ from, to });
+        const res = await fetch(`${BASE}/api/deliveries?${params}`);
+        const data = await res.json();
+        setFiltered(data);
+      } catch(e) { console.error(e); }
+      finally { setLoading(false); }
+    };
+    fetchData();
+  }, [selectedMonth]);
+
+  const filteredByLocation = selectedLocation
+    ? filtered.filter(h => h.location === selectedLocation)
+    : filtered;
 
   // ベンダー別集計
   const vendorMap = {};
   const taxCounted = new Set();
-  for (const it of filtered) {
+  for (const it of filteredByLocation) {
     const v = it.vendor || '不明';
     if (!vendorMap[v]) vendorMap[v] = { subtotal: 0, tax: 0, items: [] };
     const price = (parseFloat(it.unit_price) || 0) * (parseFloat(it.quantity) || 0);
@@ -3664,7 +3693,9 @@ function MonthlyTab({ history, lang, l }) {
         </div>
       )}
 
-      {vendors.length === 0 ? (
+      {loading ? (
+        <div style={{ textAlign:'center', padding:'40px 0', color:'var(--text-2)', fontSize:14 }}>読み込み中...</div>
+      ) : vendors.length === 0 ? (
         <div style={{ textAlign:'center', padding:'40px 0', color:'var(--text-2)', fontSize:14 }}>{l('noHistory')}</div>
       ) : (
         <div style={{ display:'flex', flexDirection:'column', gap:1, borderRadius:12, overflow:'hidden', border:'1px solid var(--border)' }}>
