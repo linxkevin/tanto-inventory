@@ -1398,7 +1398,7 @@ app.get(`/api/deliveries`, async (req, res) => {
     if (invoice_no) { params.push(invoice_no); conds.push(`invoice_no=$${params.length}`); }
     if (location)   { params.push(location);   conds.push(`location=$${params.length}`); }
     if (conds.length) sql += ' WHERE ' + conds.join(' AND ');
-    sql += ' ORDER BY created_at DESC LIMIT 100';
+    sql += ' ORDER BY created_at DESC LIMIT 2000';
     const { rows } = await pool.query(sql, params);
     res.json(rows);
   } catch (e) { res.status(500).json({ error: e.message }); }
