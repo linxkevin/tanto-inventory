@@ -2211,11 +2211,20 @@ function ReceiptTab({ lang, t, showToast, location }) {
         if (footer.invoice_no) {
           const existing = await fetch(`${BASE}/api/deliveries?invoice_no=${encodeURIComponent(footer.invoice_no)}`).then(r => r.json());
           if (existing.length > 0) {
-            const ok = window.confirm(`Invoice No. "${footer.invoice_no}" はすでに登録されています。
-上書きしますか？
-（既存データを削除して新しいデータを保存します）`);
-            if (!ok) continue;
-            await Promise.all(existing.map(it => fetch(`${BASE}/api/deliveries/${it.id}`, { method: 'DELETE' })));
+            const choice = window.confirm(
+              `Invoice No. "${footer.invoice_no}" はすでに登録されています。\n\n` +
+              `[OK] → 追記（既存データに新しい行を追加）\n` +
+              `[キャンセル] → 上書き（既存データを削除して保存）`
+            );
+            if (choice === true) {
+              // 追記：既存データはそのまま、新しい行だけ追加
+              // （削除しない）
+            } else {
+              // 上書き確認
+              const overwrite = window.confirm(`既存データを削除して上書きしますか？\nキャンセルで保存をスキップします。`);
+              if (!overwrite) continue;
+              await Promise.all(existing.map(it => fetch(`${BASE}/api/deliveries/${it.id}`, { method: 'DELETE' })));
+            }
           }
         }
         const payload = group.rows.map(r => ({
