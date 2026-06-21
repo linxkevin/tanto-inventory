@@ -1099,6 +1099,7 @@ function SettingsTab({ lang, t, items, setItems, adminEmail, setAdminEmail, cate
         vendor_item_name: editingItem.vendor_item_name || '',
         vendor_item_code: editingItem.vendor_item_code || '',
         order_item_name: editingItem.order_item_name || '',
+        vendor: editingItem.vendor || '',
       });
       setAllItems(its => its.map(i => i.id===editingItem.id ? {...i, ...updated} : i));
       setItems(its => its.map(i => i.id===editingItem.id ? {...i, ...updated} : i));
