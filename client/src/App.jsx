@@ -1405,61 +1405,70 @@ Japanese: ${name}`
       )}
 
       {/* 並び替えモードのヒント */}
-      {searchQuery === '' && (
-        <div style={{fontSize:11,color:'var(--text-2)',marginBottom:8}}>
-          💡 同一カテゴリー・業者内であれば、カードをドラッグして並び替えできます（発注リストの表示順に反映されます）
-        </div>
-      )}
+      <div style={{fontSize:11,color:'var(--text-2)',marginBottom:8}}>
+        💡 業者ごとのグループ内でカードをドラッグして並び替えできます（発注リストの表示順に反映されます）
+      </div>
 
-      {/* Item list */}
-      <div className="settings-grid">
-        {(allItems.length ? allItems : items)
+      {/* Item list（業者ごとにグループ化） */}
+      {(() => {
+        const filteredAll = (allItems.length ? allItems : items)
           .filter(item => settingsFilter==='all' ? true : settingsFilter==='active' ? item.active!==false : item.active===false)
-          .filter(item => !searchQuery || item.name_ja.toLowerCase().includes(searchQuery.toLowerCase()) || (item.category||'').toLowerCase().includes(searchQuery.toLowerCase()) || (item.vendor||'').toLowerCase().includes(searchQuery.toLowerCase()))
-          .map((item, idx, arr) => {
-          const isHidden = item.active === false;
-          const handleDragStart = (e) => {
-            e.dataTransfer.setData('text/plain', String(item.id));
-            e.dataTransfer.effectAllowed = 'move';
-          };
-          const handleDragOver = (e) => { e.preventDefault(); };
-          const handleDrop = async (e) => {
-            e.preventDefault();
-            const draggedId = parseInt(e.dataTransfer.getData('text/plain'), 10);
-            if (draggedId === item.id) return;
-            const draggedItem = arr.find(i => i.id === draggedId);
-            if (!draggedItem) return;
-            // 同一vendor内でのみ並び替え許可
-            if ((draggedItem.vendor || '') !== (item.vendor || '')) {
-              showToast('⚠️ 同じ業者内でのみ並び替えできます');
-              return;
-            }
-            // arr内での並び替え後のsort_orderを再計算
-            const vendorGroup = arr.filter(i => (i.vendor || '') === (item.vendor || ''));
-            const withoutDragged = vendorGroup.filter(i => i.id !== draggedId);
-            const targetIdx = withoutDragged.findIndex(i => i.id === item.id);
-            withoutDragged.splice(targetIdx, 0, draggedItem);
-            const reorderPayload = withoutDragged.map((i, n) => ({ id: i.id, sort_order: n }));
-            try {
-              const BASE = process.env.REACT_APP_API_URL || 'http://localhost:3001';
-              await fetch(`${BASE}/api/items/reorder`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ items: reorderPayload }),
-              });
-              refreshAllItems();
-              showToast('✅ 並び順を更新しました');
-            } catch (e) {
-              showToast('❌ 並び替えエラー: ' + e.message);
-            }
-          };
+          .filter(item => !searchQuery || item.name_ja.toLowerCase().includes(searchQuery.toLowerCase()) || (item.category||'').toLowerCase().includes(searchQuery.toLowerCase()) || (item.vendor||'').toLowerCase().includes(searchQuery.toLowerCase()));
+
+        // 業者ごとにグループ化（順序はvendorの初出順）
+        const vendorOrder = [];
+        const grouped = {};
+        filteredAll.forEach(item => {
+          const v = item.vendor || '(業者未設定)';
+          if (!grouped[v]) { grouped[v] = []; vendorOrder.push(v); }
+          grouped[v].push(item);
+        });
+
+        return vendorOrder.map(vendorName => {
+          const groupItems = grouped[vendorName];
           return (
-            <div key={item.id} className="scard"
-              draggable={searchQuery === ''}
-              onDragStart={handleDragStart}
-              onDragOver={handleDragOver}
-              onDrop={handleDrop}
-              style={{opacity:isHidden?0.55:1,borderColor:isHidden?'var(--border)':'var(--border)',cursor: searchQuery===''?'grab':'default'}}>
+            <div key={vendorName} style={{marginBottom:20}}>
+              <div style={{fontSize:13,fontWeight:600,color:'#D85A30',marginBottom:8,paddingBottom:4,borderBottom:'1px solid var(--border)'}}>
+                {vendorName} <span style={{fontSize:11,fontWeight:400,color:'var(--text-2)'}}>（{groupItems.length}品目）</span>
+              </div>
+              <div className="settings-grid">
+                {groupItems.map((item, idx, arr) => {
+                  const isHidden = item.active === false;
+                  const handleDragStart = (e) => {
+                    e.dataTransfer.setData('text/plain', String(item.id));
+                    e.dataTransfer.effectAllowed = 'move';
+                  };
+                  const handleDragOver = (e) => { e.preventDefault(); };
+                  const handleDrop = async (e) => {
+                    e.preventDefault();
+                    const draggedId = parseInt(e.dataTransfer.getData('text/plain'), 10);
+                    if (draggedId === item.id) return;
+                    const draggedItem = arr.find(i => i.id === draggedId);
+                    if (!draggedItem) return; // 同一グループ内のドラッグのみ（arrはグループ内配列なので業者違いは自動的に対象外）
+                    const withoutDragged = arr.filter(i => i.id !== draggedId);
+                    const targetIdx = withoutDragged.findIndex(i => i.id === item.id);
+                    withoutDragged.splice(targetIdx, 0, draggedItem);
+                    const reorderPayload = withoutDragged.map((i, n) => ({ id: i.id, sort_order: n }));
+                    try {
+                      const BASE = process.env.REACT_APP_API_URL || 'http://localhost:3001';
+                      await fetch(`${BASE}/api/items/reorder`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ items: reorderPayload }),
+                      });
+                      refreshAllItems();
+                      showToast('✅ 並び順を更新しました');
+                    } catch (e) {
+                      showToast('❌ 並び替えエラー: ' + e.message);
+                    }
+                  };
+                  return (
+                    <div key={item.id} className="scard"
+                      draggable={true}
+                      onDragStart={handleDragStart}
+                      onDragOver={handleDragOver}
+                      onDrop={handleDrop}
+                      style={{opacity:isHidden?0.55:1,borderColor:isHidden?'var(--border)':'var(--border)',cursor:'grab'}}>
               <div className="scard-name" style={{justifyContent:'space-between'}}>
                 <div style={{display:'flex',alignItems:'center',gap:6,minWidth:0}}>
                   <span style={{fontSize:10,background:'var(--bg-2)',color:'var(--text-2)',padding:'1px 6px',borderRadius:8,flexShrink:0}}>{item.category}</span>
@@ -1495,15 +1504,19 @@ Japanese: ${name}`
                     ? (lang==='en'?'Enable':lang==='zh'?'启用':'有効')
                     : (lang==='en'?'Hide':lang==='zh'?'隐藏':'非表示')}
                 </button>
-                <button onClick={()=>deleteItem(item)}
-                  style={{fontSize:11,padding:'3px 10px',borderRadius:10,border:'0.5px solid #FCEBEB',background:'#FCEBEB',cursor:'pointer',color:'#A32D2D'}}>
-                  {lang==='en'?'Delete':lang==='zh'?'删除':'削除'}
-                </button>
+                      <button onClick={()=>deleteItem(item)}
+                        style={{fontSize:11,padding:'3px 10px',borderRadius:10,border:'0.5px solid #FCEBEB',background:'#FCEBEB',cursor:'pointer',color:'#A32D2D'}}>
+                        {lang==='en'?'Delete':lang==='zh'?'删除':'削除'}
+                      </button>
+                    </div>
+                  </div>
+                  );
+                })}
               </div>
             </div>
           );
-        })}
-      </div>
+        });
+      })()}
 
       {/* Edit Modal */}
       {editingItem && (
