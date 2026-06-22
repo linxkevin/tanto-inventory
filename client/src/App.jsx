@@ -170,6 +170,8 @@ export default function App() {
 // ─────────────────────────────────────────────────────
 // STAFF TAB
 // ─────────────────────────────────────────────────────
+const STORAGE_KEY = 'tanto_inventory_draft';
+
 function StaffTab({ lang, t, items, location, adminEmail, categories: catProp, onComplete, showToast }) {
   const [screen, setScreen]           = useState('top'); // 'top' | 'count' | 'done'
   const [staffName, setStaffName]     = useState('');
@@ -178,6 +180,68 @@ function StaffTab({ lang, t, items, location, adminEmail, categories: catProp, o
   const [savedVendors, setSavedVendors] = useState({});
   const [counts, setCounts]           = useState({}); // { itemId: value }
   const [completedInfo, setCompletedInfo] = useState(null); // { staffName, categories, date, time, location }
+  const [showResumePrompt, setShowResumePrompt] = useState(false);
+  const [draftData, setDraftData]     = useState(null);
+
+  // 起動時に保存済みドラフトがあるか確認
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        // 同一店舗のドラフトのみ復元対象にする
+        if (parsed && parsed.location === (location || 'Piikoi') && parsed.selected && parsed.selected.length > 0) {
+          setDraftData(parsed);
+          setShowResumePrompt(true);
+        }
+      }
+    } catch (e) { console.error('draft load error', e); }
+  }, []);
+
+  // counts/selected/savedVendors/staffNameが変わるたびに自動保存（countスクリーンの間のみ）
+  useEffect(() => {
+    if (screen !== 'count') return;
+    try {
+      const draft = {
+        location: location || 'Piikoi',
+        staffName, selected, activeVendor, savedVendors, counts,
+        savedAt: new Date().toISOString(),
+      };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(draft));
+    } catch (e) { console.error('draft save error', e); }
+  }, [screen, staffName, selected, activeVendor, savedVendors, counts, location]);
+
+  function clearDraft() {
+    try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
+  }
+
+  function resumeDraft() {
+    if (!draftData) return;
+    setStaffName(draftData.staffName || '');
+    setSelected(draftData.selected || []);
+    setActiveVendor(draftData.activeVendor || (draftData.selected && draftData.selected[0]) || null);
+    setSavedVendors(draftData.savedVendors || {});
+    setCounts(draftData.counts || {});
+    setShowResumePrompt(false);
+    setScreen('count');
+  }
+
+  function discardDraft() {
+    clearDraft();
+    setShowResumePrompt(false);
+    setDraftData(null);
+  }
+
+  function cancelCounting() {
+    if (!window.confirm(lang==='en' ? 'Discard current input and return to top?' : lang==='zh' ? '放弃当前输入并返回首页？' : '入力中のデータを破棄してホームに戻りますか？')) return;
+    clearDraft();
+    setStaffName('');
+    setSelected([]);
+    setActiveVendor(null);
+    setSavedVendors({});
+    setCounts({});
+    setScreen('top');
+  }
 
   // Use categories from App state (managed in settings)
   const CATEGORIES = catProp || ['肉・海鮮','野菜・卵','麺・米','調味料','乾物・ストック','冷凍・その他','サーバー'];
@@ -285,6 +349,7 @@ function StaffTab({ lang, t, items, location, adminEmail, categories: catProp, o
         time: timeStr,
         location: location || 'Piikoi',
       });
+      clearDraft();
       setCounts({}); setSavedVendors({}); setSelected([]);
       setScreen('done');
       onComplete();
@@ -392,6 +457,31 @@ function StaffTab({ lang, t, items, location, adminEmail, categories: catProp, o
     );
   }
 
+  // ── RESUME PROMPT ──
+  if (showResumePrompt && draftData) {
+    const savedAtStr = draftData.savedAt ? new Date(draftData.savedAt).toLocaleString('ja-JP', {month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '';
+    const catCount = (draftData.selected || []).length;
+    return (
+      <div style={{maxWidth:420,margin:'3rem auto',textAlign:'center',padding:'0 1rem'}}>
+        <div style={{fontSize:48,marginBottom:'0.75rem'}}>📋</div>
+        <div style={{fontSize:17,fontWeight:600,color:'var(--text-1)',marginBottom:8}}>
+          {lang==='en'?'Resume previous inventory?':lang==='zh'?'继续上次的盘点？':'前回の棚卸しの続きがあります'}
+        </div>
+        <div style={{fontSize:13,color:'var(--text-2)',marginBottom:'1.5rem'}}>
+          {draftData.staffName && <>{draftData.staffName} — </>}{catCount}{lang==='en'?' categories':lang==='zh'?' 个类别':'カテゴリー'} — {savedAtStr}
+        </div>
+        <button onClick={resumeDraft}
+          style={{width:'100%',padding:'14px',background:'#D85A30',color:'white',border:'none',borderRadius:'var(--radius-sm)',fontSize:15,fontWeight:600,cursor:'pointer',marginBottom:10}}>
+          {lang==='en'?'Resume':lang==='zh'?'继续':'続きから再開する'}
+        </button>
+        <button onClick={discardDraft}
+          style={{width:'100%',padding:'12px',background:'transparent',border:'0.5px solid var(--border)',borderRadius:'var(--radius-sm)',fontSize:13,color:'var(--text-2)',cursor:'pointer'}}>
+          {lang==='en'?'Discard and start new':lang==='zh'?'放弃并重新开始':'破棄して新しく始める'}
+        </button>
+      </div>
+    );
+  }
+
   // ── TOP SCREEN ──
   if (screen === 'top') return (
     <div>
@@ -461,6 +551,9 @@ function StaffTab({ lang, t, items, location, adminEmail, categories: catProp, o
         <span className="vendor-info">— {catLabel(activeVendor)} ({activeItems.length}{t('itemsLabel')})</span>
         <button className="btn-outline" style={{marginLeft:'auto',fontSize:12,padding:'5px 10px'}} onClick={backToTop}>
           ← {t('backBtn')}
+        </button>
+        <button className="btn-outline" style={{fontSize:12,padding:'5px 10px',color:'#A32D2D',borderColor:'#FCEBEB'}} onClick={cancelCounting}>
+          {lang==='en'?'Cancel':lang==='zh'?'取消':'キャンセル'}
         </button>
       </div>
 
