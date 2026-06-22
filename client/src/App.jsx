@@ -170,7 +170,7 @@ export default function App() {
 // ─────────────────────────────────────────────────────
 // STAFF TAB
 // ─────────────────────────────────────────────────────
-const STORAGE_KEY = 'tanto_inventory_draft';
+const STORAGE_KEY = 'tanto_inventory_drafts'; // 複数ドラフト対応（配列）
 
 function StaffTab({ lang, t, items, location, adminEmail, categories: catProp, onComplete, showToast }) {
   const [screen, setScreen]           = useState('top'); // 'top' | 'count' | 'done'
@@ -181,55 +181,84 @@ function StaffTab({ lang, t, items, location, adminEmail, categories: catProp, o
   const [counts, setCounts]           = useState({}); // { itemId: value }
   const [completedInfo, setCompletedInfo] = useState(null); // { staffName, categories, date, time, location }
   const [showResumePrompt, setShowResumePrompt] = useState(false);
-  const [draftData, setDraftData]     = useState(null);
+  const [draftList, setDraftList]     = useState([]); // 進行中のドラフト一覧
+  const [currentDraftId, setCurrentDraftId] = useState(null); // 現在入力中のドラフトID
 
-  // 起動時に保存済みドラフトがあるか確認
-  useEffect(() => {
+  function loadDrafts() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        // 同一店舗のドラフトのみ復元対象にする
-        if (parsed && parsed.location === (location || 'Piikoi') && parsed.selected && parsed.selected.length > 0) {
-          setDraftData(parsed);
-          setShowResumePrompt(true);
-        }
-      }
-    } catch (e) { console.error('draft load error', e); }
+      const list = raw ? JSON.parse(raw) : [];
+      return Array.isArray(list) ? list : [];
+    } catch (e) { return []; }
+  }
+
+  function saveDrafts(list) {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(list)); } catch (e) {}
+  }
+
+  // 起動時に保存済みドラフトがあるか確認（同一店舗のみ）
+  useEffect(() => {
+    const list = loadDrafts().filter(d => d.location === (location || 'Piikoi'));
+    if (list.length > 0) {
+      setDraftList(list);
+      setShowResumePrompt(true);
+    }
   }, []);
 
   // counts/selected/savedVendors/staffNameが変わるたびに自動保存（countスクリーンの間のみ）
   useEffect(() => {
-    if (screen !== 'count') return;
+    if (screen !== 'count' || !currentDraftId) return;
     try {
+      const all = loadDrafts();
+      const idx = all.findIndex(d => d.id === currentDraftId);
       const draft = {
+        id: currentDraftId,
         location: location || 'Piikoi',
         staffName, selected, activeVendor, savedVendors, counts,
         savedAt: new Date().toISOString(),
       };
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(draft));
+      if (idx >= 0) all[idx] = draft; else all.push(draft);
+      saveDrafts(all);
     } catch (e) { console.error('draft save error', e); }
-  }, [screen, staffName, selected, activeVendor, savedVendors, counts, location]);
+  }, [screen, staffName, selected, activeVendor, savedVendors, counts, location, currentDraftId]);
 
-  function clearDraft() {
-    try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
+  function removeDraftById(id) {
+    const all = loadDrafts().filter(d => d.id !== id);
+    saveDrafts(all);
   }
 
-  function resumeDraft() {
-    if (!draftData) return;
-    setStaffName(draftData.staffName || '');
-    setSelected(draftData.selected || []);
-    setActiveVendor(draftData.activeVendor || (draftData.selected && draftData.selected[0]) || null);
-    setSavedVendors(draftData.savedVendors || {});
-    setCounts(draftData.counts || {});
+  function clearDraft() {
+    if (currentDraftId) removeDraftById(currentDraftId);
+    setCurrentDraftId(null);
+  }
+
+  function resumeDraft(draft) {
+    setStaffName(draft.staffName || '');
+    setSelected(draft.selected || []);
+    setActiveVendor(draft.activeVendor || (draft.selected && draft.selected[0]) || null);
+    setSavedVendors(draft.savedVendors || {});
+    setCounts(draft.counts || {});
+    setCurrentDraftId(draft.id);
     setShowResumePrompt(false);
     setScreen('count');
   }
 
-  function discardDraft() {
-    clearDraft();
+  function discardDraftPrompt(id) {
+    if (!window.confirm(lang==='en' ? 'Delete this draft?' : lang==='zh' ? '删除此草稿？' : 'この入力中データを削除しますか？')) return;
+    removeDraftById(id);
+    const remaining = draftList.filter(d => d.id !== id);
+    setDraftList(remaining);
+    if (remaining.length === 0) setShowResumePrompt(false);
+  }
+
+  function startNewFromPrompt() {
     setShowResumePrompt(false);
-    setDraftData(null);
+    setStaffName('');
+    setSelected([]);
+    setActiveVendor(null);
+    setSavedVendors({});
+    setCounts({});
+    setCurrentDraftId(null);
   }
 
   function cancelCounting() {
@@ -279,6 +308,9 @@ function StaffTab({ lang, t, items, location, adminEmail, categories: catProp, o
   function startCounting() {
     if (!staffName.trim()) { showToast(t('toastEnterName')); return; }
     if (!selected.length)  { showToast(t('toastSelectVendor')); return; }
+    if (!currentDraftId) {
+      setCurrentDraftId(Date.now() + Math.random());
+    }
     setActiveVendor(selected[0]);
     setScreen('count');
   }
@@ -458,25 +490,42 @@ function StaffTab({ lang, t, items, location, adminEmail, categories: catProp, o
   }
 
   // ── RESUME PROMPT ──
-  if (showResumePrompt && draftData) {
-    const savedAtStr = draftData.savedAt ? new Date(draftData.savedAt).toLocaleString('ja-JP', {month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '';
-    const catCount = (draftData.selected || []).length;
+  if (showResumePrompt && draftList.length > 0) {
     return (
-      <div style={{maxWidth:420,margin:'3rem auto',textAlign:'center',padding:'0 1rem'}}>
-        <div style={{fontSize:48,marginBottom:'0.75rem'}}>📋</div>
-        <div style={{fontSize:17,fontWeight:600,color:'var(--text-1)',marginBottom:8}}>
-          {lang==='en'?'Resume previous inventory?':lang==='zh'?'继续上次的盘点？':'前回の棚卸しの続きがあります'}
+      <div style={{maxWidth:460,margin:'3rem auto',padding:'0 1rem'}}>
+        <div style={{textAlign:'center',marginBottom:'1.5rem'}}>
+          <div style={{fontSize:48,marginBottom:'0.5rem'}}>📋</div>
+          <div style={{fontSize:17,fontWeight:600,color:'var(--text-1)'}}>
+            {lang==='en'?'Inventory in progress':lang==='zh'?'盘点进行中':'進行中の棚卸しがあります'}
+          </div>
         </div>
-        <div style={{fontSize:13,color:'var(--text-2)',marginBottom:'1.5rem'}}>
-          {draftData.staffName && <>{draftData.staffName} — </>}{catCount}{lang==='en'?' categories':lang==='zh'?' 个类别':'カテゴリー'} — {savedAtStr}
+
+        <div style={{display:'flex',flexDirection:'column',gap:10,marginBottom:16}}>
+          {draftList.map(draft => {
+            const savedAtStr = draft.savedAt ? new Date(draft.savedAt).toLocaleString('ja-JP', {month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '';
+            const catCount = (draft.selected || []).length;
+            return (
+              <div key={draft.id} style={{border:'1px solid var(--border)',borderRadius:'var(--radius-sm)',padding:'12px 14px',display:'flex',alignItems:'center',gap:10}}>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontSize:14,fontWeight:600,color:'var(--text-1)'}}>{draft.staffName || (lang==='en'?'(no name)':'(名前未入力)')}</div>
+                  <div style={{fontSize:12,color:'var(--text-2)'}}>{catCount}{lang==='en'?' categories':lang==='zh'?' 个类别':'カテゴリー'} — {savedAtStr}</div>
+                </div>
+                <button onClick={() => resumeDraft(draft)}
+                  style={{padding:'8px 16px',background:'#D85A30',color:'white',border:'none',borderRadius:8,fontSize:13,fontWeight:600,cursor:'pointer',whiteSpace:'nowrap'}}>
+                  {lang==='en'?'Resume':lang==='zh'?'继续':'再開'}
+                </button>
+                <button onClick={() => discardDraftPrompt(draft.id)}
+                  style={{padding:'8px 10px',background:'transparent',border:'1px solid #FCEBEB',color:'#A32D2D',borderRadius:8,fontSize:12,cursor:'pointer'}}>
+                  {lang==='en'?'Delete':lang==='zh'?'删除':'削除'}
+                </button>
+              </div>
+            );
+          })}
         </div>
-        <button onClick={resumeDraft}
-          style={{width:'100%',padding:'14px',background:'#D85A30',color:'white',border:'none',borderRadius:'var(--radius-sm)',fontSize:15,fontWeight:600,cursor:'pointer',marginBottom:10}}>
-          {lang==='en'?'Resume':lang==='zh'?'继续':'続きから再開する'}
-        </button>
-        <button onClick={discardDraft}
+
+        <button onClick={startNewFromPrompt}
           style={{width:'100%',padding:'12px',background:'transparent',border:'0.5px solid var(--border)',borderRadius:'var(--radius-sm)',fontSize:13,color:'var(--text-2)',cursor:'pointer'}}>
-          {lang==='en'?'Discard and start new':lang==='zh'?'放弃并重新开始':'破棄して新しく始める'}
+          {lang==='en'?'+ Start new (different staff/category)':lang==='zh'?'+ 开始新的盘点（不同员工/类别）':'＋ 新しいスタッフ・カテゴリーで開始する'}
         </button>
       </div>
     );
