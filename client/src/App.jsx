@@ -1100,6 +1100,7 @@ function SettingsTab({ lang, t, items, setItems, adminEmail, setAdminEmail, cate
         vendor_item_code: editingItem.vendor_item_code || '',
         order_item_name: editingItem.order_item_name || '',
         vendor: editingItem.vendor || '',
+        order_unit: editingItem.order_unit || '',
       });
       setAllItems(its => its.map(i => i.id===editingItem.id ? {...i, ...updated} : i));
       setItems(its => its.map(i => i.id===editingItem.id ? {...i, ...updated} : i));
@@ -1543,7 +1544,7 @@ Japanese: ${name}`
             </div>
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
               <div className="form-row" style={{margin:0}}>
-                <label className="form-label">{lang==='en'?'Unit':lang==='zh'?'单位':'単位'}</label>
+                <label className="form-label">{lang==='en'?'Unit (Stock)':lang==='zh'?'单位（库存）':'単位（在庫）'}</label>
                 <input className="form-input" value={editingItem.unit}
                   onChange={e=>setEditingItem(v=>({...v,unit:e.target.value}))} />
               </div>
@@ -1552,6 +1553,12 @@ Japanese: ${name}`
                 <input className="form-input" type="number" value={editingItem.min_stock}
                   onChange={e=>setEditingItem(v=>({...v,min_stock:parseInt(e.target.value)||0}))} />
               </div>
+            </div>
+            <div className="form-row">
+              <label className="form-label">{lang==='en'?'Unit (Order)':lang==='zh'?'单位（订货）':'単位（発注用・任意）'}</label>
+              <input className="form-input" value={editingItem.order_unit || ''}
+                placeholder={`未設定時は在庫単位「${editingItem.unit}」を使用`}
+                onChange={e=>setEditingItem(v=>({...v,order_unit:e.target.value}))} />
             </div>
             {/* 店舗別規定在庫 */}
             <div className="form-row" style={{marginTop:8}}>
@@ -2841,7 +2848,7 @@ function OrderTab({ lang, t, items, showToast, location, sessions }) {
           const b = normalizeVendorName(vendor);
           return b.includes(a) || a.includes(b);
         })
-        .map(it => ({ name: it.order_item_name || it.name_en || it.name_ja, unit: it.unit, _itemId: it.id }))
+        .map(it => ({ name: it.order_item_name || it.name_en || it.name_ja, unit: it.order_unit || it.unit, _itemId: it.id }))
     : [];
   const orderedItems = vendorItems.filter(it => quantities[it.name] > 0);
 

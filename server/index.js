@@ -60,6 +60,10 @@ async function initDB() {
       ALTER TABLE items ADD COLUMN IF NOT EXISTS sort_order INTEGER DEFAULT 0;
     EXCEPTION WHEN others THEN NULL;
     END $$;
+    DO $$ BEGIN
+      ALTER TABLE items ADD COLUMN IF NOT EXISTS order_unit TEXT DEFAULT '';
+    EXCEPTION WHEN others THEN NULL;
+    END $$;
 
     CREATE TABLE IF NOT EXISTS sessions (
       id SERIAL PRIMARY KEY,
@@ -516,7 +520,7 @@ app.get('/api/items', async (req, res) => {
 
 // PATCH item settings (name_ja / name_en / name_zh / unit / min_stock / category / active)
 app.patch('/api/items/:id', async (req, res) => {
-  const { name_ja, name_en, name_zh, unit, min_stock, category, active, vendor_item_name, vendor_item_code, order_item_name, vendor, sort_order } = req.body;
+  const { name_ja, name_en, name_zh, unit, min_stock, category, active, vendor_item_name, vendor_item_code, order_item_name, vendor, sort_order, order_unit } = req.body;
   try {
     const { rows } = await pool.query(
       `UPDATE items SET
@@ -528,12 +532,13 @@ app.patch('/api/items/:id', async (req, res) => {
         vendor_item_code=COALESCE($10, vendor_item_code),
         order_item_name=COALESCE($11, order_item_name),
         vendor=COALESCE($12, vendor),
-        sort_order=COALESCE($13, sort_order)
+        sort_order=COALESCE($13, sort_order),
+        order_unit=COALESCE($14, order_unit)
        WHERE id=$8 RETURNING *`,
       [name_ja||null, name_en||null, name_zh||null, unit, min_stock, category || '調味料',
        active !== undefined ? active : true, req.params.id,
        vendor_item_name||null, vendor_item_code||null, order_item_name||null, vendor||null,
-       sort_order !== undefined ? sort_order : null]
+       sort_order !== undefined ? sort_order : null, order_unit !== undefined ? order_unit : null]
     );
     res.json(rows[0]);
   } catch (e) {
