@@ -2751,7 +2751,7 @@ const VENDOR_ITEMS = {
   'Fukuoka Package USA, Inc.': [
     {name:'FP16-11 White Paper Box',unit:'CS'},{name:'FP21-14 White Paper Box',unit:'CS'},
     {name:'9" Full Wrapped Bamboo Chopsticks',unit:'CS'},{name:'1-Ply Dinner Napkin',unit:'CS'},
-    {name:'Multifold Paper Towel',unit:'CS'},
+    {name:'Multifold Paper Towel',unit:'CS'},{name:'テイクアウト用ソース蓋',unit:'袋'},
   ],
 };
 
@@ -2769,7 +2769,12 @@ function OrderTab({ lang, t, items, showToast, location, sessions }) {
   const [orderSubTab, setOrderSubTab] = useState('new'); // new | history
 
   const vendors = Object.keys(VENDOR_MASTER);
-  const vendorItems = vendor ? (VENDOR_ITEMS[vendor] || []) : [];
+  // 発注品目リストをitemsテーブルのvendorフィールドから動的生成
+  const vendorItems = vendor
+    ? items
+        .filter(it => it.vendor === vendor && it.active !== false)
+        .map(it => ({ name: it.order_item_name || it.name_en || it.name_ja, unit: it.unit, _itemId: it.id }))
+    : [];
   const orderedItems = vendorItems.filter(it => quantities[it.name] > 0);
 
   useEffect(() => { loadOrders(); }, []);
@@ -2932,8 +2937,8 @@ function OrderTab({ lang, t, items, showToast, location, sessions }) {
                             const si = sessionItems.find(s => s.item_id === it.id);
                             const cur = si ? (si.current_stock || 0) : 0;
                             const shortage = it.min_stock - cur;
-                            const vItem = VENDOR_ITEMS[v]?.find(vi => vi.name === it.name_ja);
-                            if (vItem) newQtys[vItem.name] = shortage;
+                            const vItemName = it.order_item_name || it.name_en || it.name_ja;
+                            if (vItemName) newQtys[vItemName] = shortage;
                           });
                           setQuantities(newQtys);
                         }}
