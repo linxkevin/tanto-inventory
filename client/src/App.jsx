@@ -518,7 +518,7 @@ function StaffTab({ lang, t, items, location, adminEmail, categories: catProp, o
                 <div className="vt-count">{its.length}{t('itemsLabel')}</div>
               </div>
               {isDone
-                ? <span className="vt-done-badge">✓ {savedVendors[c].staff}</span>
+                ? <span className="vt-done-badge">✓ {savedVendors[getCatName(c)]?.staff || ''}</span>
                 : isSel ? <span style={{fontSize:18,color:'var(--accent)'}}>✓</span> : null
               }
             </div>
