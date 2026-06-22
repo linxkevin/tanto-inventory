@@ -2770,9 +2770,17 @@ function OrderTab({ lang, t, items, showToast, location, sessions }) {
 
   const vendors = Object.keys(VENDOR_MASTER);
   // 発注品目リストをitemsテーブルのvendorフィールドから動的生成
+  // items側のvendorは短縮形（例: 'Fukuoka Package'）、発注フォームのvendorは正式名（例: 'Fukuoka Package USA, Inc.'）
+  // のため、正規化して部分一致でマッチングする
+  const normalizeVendorName = (v) => (v || '').toLowerCase().replace(/[.,]/g, '').trim();
   const vendorItems = vendor
     ? items
-        .filter(it => it.vendor === vendor && it.active !== false)
+        .filter(it => {
+          if (!it.vendor || it.active === false) return false;
+          const a = normalizeVendorName(it.vendor);
+          const b = normalizeVendorName(vendor);
+          return b.includes(a) || a.includes(b);
+        })
         .map(it => ({ name: it.order_item_name || it.name_en || it.name_ja, unit: it.unit, _itemId: it.id }))
     : [];
   const orderedItems = vendorItems.filter(it => quantities[it.name] > 0);
