@@ -2990,7 +2990,7 @@ function OrderTab({ lang, t, items, showToast, location, sessions }) {
           const b = normalizeVendorName(vendor);
           return b.includes(a) || a.includes(b);
         })
-        .map(it => ({ name: it.order_item_name || it.name_en || it.name_ja, unit: it.order_unit || it.unit, _itemId: it.id }))
+        .map(it => ({ name: it.order_item_name || it.name_ja || it.name_en, unit: it.order_unit || it.unit, _itemId: it.id }))
     : [];
   const orderedItems = vendorItems.filter(it => quantities[it.name] > 0);
 
@@ -3154,7 +3154,7 @@ function OrderTab({ lang, t, items, showToast, location, sessions }) {
                             const si = sessionItems.find(s => s.item_id === it.id);
                             const cur = si ? (si.current_stock || 0) : 0;
                             const shortage = it.min_stock - cur;
-                            const vItemName = it.order_item_name || it.name_en || it.name_ja;
+                            const vItemName = it.order_item_name || it.name_ja || it.name_en;
                             if (vItemName) newQtys[vItemName] = shortage;
                           });
                           setQuantities(newQtys);
