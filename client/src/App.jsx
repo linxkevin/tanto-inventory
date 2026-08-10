@@ -4268,31 +4268,30 @@ function DeliveryHistory({ history, deleteItem, deleteGroup, onReload }) {
                     グループ削除
                   </button>
                 </div>
-                <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12 }}>
-                  <tbody>
+                <div>
                     {sortedItems.map(it => (
-                      <tr key={it.id} style={{ borderBottom:'1px solid var(--border)' }}>
-                        <td style={{ padding:'8px 14px', color:'var(--text-1)' }}>
-                          {it.item_name}{it.item_code ? <span style={{ color:'var(--text-2)', marginLeft:6 }}>#{it.item_code}</span> : ''}
-                        </td>
-                        <td style={{ padding:'8px 14px', color:'var(--text-2)', textAlign:'right', whiteSpace:'nowrap' }}>
-                          {it.unit_price != null ? `$${parseFloat(it.unit_price).toFixed(2)}` : '—'} × {it.quantity != null ? it.quantity : '—'}
-                        </td>
-                        <td style={{ padding:'8px 14px', fontWeight:600, color:'var(--text-1)', textAlign:'right', whiteSpace:'nowrap' }}>
-                          {it.unit_price != null && it.quantity != null
-                            ? `$${(parseFloat(it.unit_price) * parseFloat(it.quantity)).toFixed(2)}`
-                            : '—'}
-                        </td>
-                        <td style={{ padding:'8px 6px', textAlign:'right' }}>
-                          <button onClick={() => deleteItem(it.id)}
-                            style={{ padding:'3px 8px', fontSize:11, border:'1px solid #e55', borderRadius:6, background:'transparent', color:'#e55', cursor:'pointer' }}>
-                            削除
-                          </button>
-                        </td>
-                      </tr>
+                      <div key={it.id} style={{ borderBottom:'1px solid var(--border)', padding:'8px 14px', display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:8 }}>
+                        <div style={{ flex:1, minWidth:0 }}>
+                          <div style={{ color:'var(--text-1)', wordBreak:'break-word', lineHeight:1.4 }}>
+                            {it.item_name}
+                            {it.item_code ? <span style={{ color:'var(--text-2)', marginLeft:6, fontSize:11 }}>#{it.item_code}</span> : ''}
+                          </div>
+                          <div style={{ fontSize:11, color:'var(--text-2)', marginTop:2 }}>
+                            {it.unit_price != null ? `$${parseFloat(it.unit_price).toFixed(2)}` : '—'} × {it.quantity != null ? it.quantity : '—'}
+                            {it.unit_price != null && it.quantity != null && (
+                              <span style={{ fontWeight:600, color:'var(--text-1)', marginLeft:8 }}>
+                                = ${(parseFloat(it.unit_price) * parseFloat(it.quantity)).toFixed(2)}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <button onClick={() => deleteItem(it.id)}
+                          style={{ padding:'3px 8px', fontSize:11, border:'1px solid #e55', borderRadius:6, background:'transparent', color:'#e55', cursor:'pointer', flexShrink:0 }}>
+                          削除
+                        </button>
+                      </div>
                     ))}
-                  </tbody>
-                </table>
+                </div>
               </div>
             );
           })}
