@@ -2884,7 +2884,7 @@ const TEST_EMAIL = 'sales@tanto-otabe.com';
 
 const VENDOR_MASTER = {
   'JFC International INC.': {
-    email: 'Wnakai@jfc.com',
+    email: 'ynakagawa@jfc.com',
     cc: 'master@tanto-otabe.com,sales@tanto-otabe.com',
     days: '月〜金（土日定休）',
     cutoff: '前日14時まで',
