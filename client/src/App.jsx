@@ -2890,7 +2890,7 @@ const VENDOR_MASTER = {
     cutoff: '前日14時まで',
   },
   'The Cherry Co., Ltd.': {
-    email: 'ikko@mutual.us,hi.ordrtedeskgrp@mutual.us',
+    email: 'ikko@mutual.us,hi.orderdeskgrp@mutual.us',
     cc: 'master@tanto-otabe.com,sales@tanto-otabe.com',
     days: '月〜土',
     cutoff: '前日まで',
